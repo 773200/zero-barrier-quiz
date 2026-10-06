@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zero Barrier Quiz</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+        <img src="images/logo.png" alt="Zero Barrier Logo" class="site-logo">
+        <span>Zero Barrier <b>Quiz</b></span>
+    </div>
+
+    <button class="ghost-btn" onclick="showHome()">Home</button>
+</header>
+
+  <main class="container">
+    <section id="homeView" class="view active">
+      <div class="hero">
+<img src="images/loyola-college.jpg" alt="Loyola College" class="college-image">
+        <div class="badge">🎓 Smart Quiz Platform</div>
+        <h1>Welcome to Zero Barrier Quiz</h1>
+        <p class="subtitle">Create, share and take quizzes easily.</p>
+        <div class="role-grid">
+          <button class="role-card" onclick="openTeacher()">
+            <div class="role-icon">👩‍🏫</div>
+            <h2>Teacher</h2>
+            <p>Create your own quiz or let AI generate questions for you.</p>
+          </button>
+          <button class="role-card" onclick="openAdmin()">
+            <div class="role-icon">🛡️</div>
+            <h2>Admin</h2>
+            <p>View quizzes created on this device and manage the prototype.</p>
+          </button>
+          <button class="role-card" onclick="openStudent()">
+            <div class="role-icon">👨‍🎓</div>
+            <h2>Student</h2>
+            <p>Enter a quiz code and take a quiz.</p>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section id="teacherView" class="view">
+      <div class="section-heading">
+        <div>
+          <div class="badge">Teacher Dashboard</div>
+          <h1>Create a Quiz</h1>
+          <p>Choose how you want to create your quiz.</p>
+        </div>
+        <button class="ghost-btn" onclick="showHome()">← Home</button>
+      </div>
+
+      <div class="choice-grid">
+        <button class="choice-card selected" onclick="selectCreateMode('ai')" id="aiModeCard">
+          <div class="choice-icon">🤖</div>
+          <h2>AI Quiz Generator</h2>
+          <p>Give a topic and number of questions. AI creates the quiz.</p>
+        </button>
+        <button class="choice-card" onclick="selectCreateMode('manual')" id="manualModeCard">
+          <div class="choice-icon">✍️</div>
+          <h2>Create My Own Quiz</h2>
+          <p>Write your own questions and answers.</p>
+        </button>
+      </div>
+
+      <div id="aiCreator" class="panel">
+        <h2>🤖 Generate Quiz with AI</h2>
+        <p class="muted">Example: <strong>Photosynthesis</strong> → 10 questions → Medium → MCQ.</p>
+        <div class="form-grid">
+          <div class="field full">
+            <label>Quiz Topic</label>
+            <input id="aiTopic" placeholder="Example: Photosynthesis">
+          </div>
+          <div class="field">
+            <label>Number of Questions</label>
+            <input id="aiCount" type="number" min="1" max="30" value="10">
+          </div>
+          <div class="field">
+            <label>Difficulty</label>
+            <select id="aiDifficulty">
+              <option>Easy</option>
+              <option selected>Medium</option>
+              <option>Hard</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Question Type</label>
+            <select id="aiType">
+              <option value="mcq">Multiple Choice Questions</option>
+              <option value="truefalse">True / False</option>
+            </select>
+          </div>
+        </div>
+        <button class="primary-btn" onclick="generateAIQuiz()">🤖 Generate Quiz with AI</button>
+        <div id="aiStatus"></div>
+      </div>
+
+      <div id="manualCreator" class="panel hidden">
+        <h2>✍️ Create Your Own Quiz</h2>
+        <div class="form-grid">
+          <div class="field full">
+            <label>Quiz Title</label>
+            <input id="manualTitle" placeholder="Example: General Science Quiz">
+          </div>
+        </div>
+        <div id="manualQuestions"></div>
+        <button class="secondary-btn" onclick="addManualQuestion()">+ Add Question</button>
+        <button class="primary-btn" onclick="saveManualQuiz()">Save & Create Quiz Code</button>
+        <div id="manualStatus"></div>
+      </div>
+
+      <div id="createdQuizPanel" class="panel hidden"></div>
+    </section>
+
+    <section id="studentView" class="view">
+      <div class="section-heading">
+        <div>
+          <div class="badge">Student</div>
+          <h1>Join a Quiz</h1>
+          <p>Enter your name and the code shared by your teacher.</p>
+        </div>
+        <button class="ghost-btn" onclick="showHome()">← Home</button>
+      </div>
+      <div class="panel narrow">
+        <label>Your Name</label>
+        <input id="studentName" placeholder="Enter your name">
+        <label>Quiz Code</label>
+        <input id="studentCode" placeholder="Example: ZBQ7421" maxlength="7">
+        <button class="primary-btn" onclick="joinQuiz()">Join Quiz</button>
+        <div id="studentMessage"></div>
+      </div>
+    </section>
+
+    <section id="quizView" class="view">
+      <div class="section-heading">
+        <div>
+          <div class="badge">Quiz</div>
+          <h1 id="quizTitle"></h1>
+          <p id="quizStudent"></p>
+        </div>
+      </div>
+      <div id="quizQuestions"></div>
+      <button class="primary-btn" onclick="submitQuiz()">Submit Quiz</button>
+      <div id="quizResult"></div>
+    </section>
+
+    <section id="adminView" class="view">
+      <div class="section-heading">
+        <div>
+          <div class="badge">Admin</div>
+          <h1>Quiz Management</h1>
+          <p>Prototype data stored in this browser.</p>
+        </div>
+        <button class="ghost-btn" onclick="showHome()">← Home</button>
+      </div>
+      <div class="panel">
+        <div id="adminList"></div>
+        <button class="danger-btn" onclick="clearAllQuizzes()">Clear Local Quizzes</button>
+      </div>
+    </section>
+  </main>
+
+  <footer>Zero Barrier Quiz • Phase 2 Prototype</footer>
+  <script src="script.js"></script>
+</body>
+</html>

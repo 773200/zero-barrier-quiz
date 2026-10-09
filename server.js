@@ -11,60 +11,40 @@ const MODEL =
 
 app.use(express.json());
 
-app.use(express.static(__dirname));
+/* ======================================================
+   SHARED QUIZ STORAGE
+   ====================================================== */
 
-/*
-  SHARED QUIZ STORAGE
-
-  This allows students on different devices
-  to access quizzes created by the teacher.
-
-  Note:
-  This storage is temporary and will be cleared
-  if the Render server restarts or redeploys.
-*/
 const quizzes = new Map();
 
+/* ======================================================
+   SHARED QUIZ RESULTS / LEADERBOARD
+   ====================================================== */
 
-// ======================================================
-// CREATE / STORE QUIZ
-// ======================================================
+const quizResults = new Map();
+
+/* ======================================================
+   CREATE QUIZ
+   ====================================================== */
 
 app.post("/api/quizzes", (req, res) => {
   try {
-    const { code, title, questions, method, createdAt } = req.body;
+    const quiz = req.body;
 
-    if (!code) {
+    if (!quiz || !quiz.code) {
       return res.status(400).json({
-        error: "Quiz code is required."
+        error: "Invalid quiz data."
       });
     }
-
-    if (!title) {
-      return res.status(400).json({
-        error: "Quiz title is required."
-      });
-    }
-
-    if (!Array.isArray(questions) || questions.length === 0) {
-      return res.status(400).json({
-        error: "Quiz questions are required."
-      });
-    }
-
-    const quiz = {
-      code: String(code).toUpperCase(),
-      title: String(title),
-      questions,
-      method: method || "Quiz",
-      createdAt: createdAt || new Date().toISOString()
-    };
 
     quizzes.set(quiz.code, quiz);
 
-    console.log(
-      `Quiz stored successfully: ${quiz.code} (${quiz.questions.length} questions)`
-    );
+    // Create empty leaderboard for this quiz
+    if (!quizResults.has(quiz.code)) {
+      quizResults.set(quiz.code, []);
+    }
+
+    console.log("Quiz stored:", quiz.code);
 
     res.json({
       success: true,
@@ -72,32 +52,29 @@ app.post("/api/quizzes", (req, res) => {
     });
 
   } catch (error) {
-    console.error("Store Quiz Error:", error);
+    console.error("Create quiz error:", error);
 
     res.status(500).json({
-      error: "Could not store quiz."
+      error: "Could not save quiz."
     });
   }
 });
 
-
-// ======================================================
-// GET QUIZ BY CODE
-// ======================================================
+/* ======================================================
+   GET QUIZ BY CODE
+   ====================================================== */
 
 app.get("/api/quizzes/:code", (req, res) => {
   try {
-    const code = String(req.params.code).trim().toUpperCase();
+    const code = req.params.code.toUpperCase();
 
     const quiz = quizzes.get(code);
 
     if (!quiz) {
       return res.status(404).json({
-        error: "Quiz not found. Please check the quiz code."
+        error: "Quiz not found."
       });
     }
-
-    console.log(`Quiz requested: ${code}`);
 
     res.json({
       success: true,
@@ -105,28 +82,186 @@ app.get("/api/quizzes/:code", (req, res) => {
     });
 
   } catch (error) {
-    console.error("Get Quiz Error:", error);
+    console.error("Get quiz error:", error);
 
     res.status(500).json({
-      error: "Could not retrieve quiz."
+      error: "Could not load quiz."
     });
   }
 });
 
+/* ======================================================
+   SUBMIT QUIZ RESULT
+   ====================================================== */
 
-// ======================================================
-// AI QUIZ GENERATOR
-// ======================================================
+app.post("/api/quizzes/:code/results", (req, res) => {
+  try {
+    const code = req.params.code.toUpperCase();
+
+    const quiz = quizzes.get(code);
+
+    if (!quiz) {
+      return res.status(404).json({
+        error: "Quiz not found."
+      });
+    }
+
+    const {
+      name,
+      score,
+      total,
+      percentage
+    } = req.body;
+
+    if (
+      !name ||
+      typeof score !== "number" ||
+      typeof total !== "number"
+    ) {
+      return res.status(400).json({
+        error: "Invalid result data."
+      });
+    }
+
+    if (!quizResults.has(code)) {
+      quizResults.set(code, []);
+    }
+
+    const results = quizResults.get(code);
+
+    const result = {
+      id:
+        Date.now().toString() +
+        Math.random().toString(36).substring(2),
+
+      name: String(name).trim(),
+
+      score: Number(score),
+
+      total: Number(total),
+
+      percentage:
+        typeof percentage === "number"
+          ? Number(percentage)
+          : Math.round((score / total) * 100),
+
+      submittedAt: new Date().toISOString()
+    };
+
+    results.push(result);
+
+    /* Sort:
+       1. Highest score first
+       2. Earlier submission first if scores are equal
+    */
+
+    results.sort((a, b) => {
+      if (b.score !== a.score) {
+        return b.score - a.score;
+      }
+
+      return (
+        new Date(a.submittedAt) -
+        new Date(b.submittedAt)
+      );
+    });
+
+    const rankedLeaderboard = results.map(
+      (item, index) => ({
+        rank: index + 1,
+        ...item
+      })
+    );
+
+    const studentRank =
+      rankedLeaderboard.find(
+        item => item.id === result.id
+      );
+
+    console.log(
+      `Result submitted: ${result.name} - ${code} - ${result.score}/${result.total}`
+    );
+
+    res.json({
+      success: true,
+
+      result: studentRank,
+
+      participants:
+        rankedLeaderboard.length,
+
+      leaderboard:
+        rankedLeaderboard
+    });
+
+  } catch (error) {
+    console.error("Submit result error:", error);
+
+    res.status(500).json({
+      error: "Could not save quiz result."
+    });
+  }
+});
+
+/* ======================================================
+   GET QUIZ LEADERBOARD
+   ====================================================== */
+
+app.get("/api/quizzes/:code/results", (req, res) => {
+  try {
+    const code = req.params.code.toUpperCase();
+
+    const quiz = quizzes.get(code);
+
+    if (!quiz) {
+      return res.status(404).json({
+        error: "Quiz not found."
+      });
+    }
+
+    const results =
+      quizResults.get(code) || [];
+
+    const rankedLeaderboard =
+      results.map((item, index) => ({
+        rank: index + 1,
+        ...item
+      }));
+
+    res.json({
+      success: true,
+
+      participants:
+        rankedLeaderboard.length,
+
+      leaderboard:
+        rankedLeaderboard
+    });
+
+  } catch (error) {
+    console.error(
+      "Get leaderboard error:",
+      error
+    );
+
+    res.status(500).json({
+      error: "Could not load leaderboard."
+    });
+  }
+});
+
+/* ======================================================
+   AI QUIZ GENERATION
+   ====================================================== */
 
 app.post("/api/generate-quiz", async (req, res) => {
   try {
-    const { topic, count, difficulty, type } = req.body;
-
-    if (!process.env.GROQ_API_KEY) {
-      return res.status(500).json({
-        error: "Groq API key is missing."
-      });
-    }
+    const {
+      topic,
+      count,
+      difficulty,
+      type
+    } = req.body;
 
     if (!topic) {
       return res.status(400).json({
@@ -134,19 +269,56 @@ app.post("/api/generate-quiz", async (req, res) => {
       });
     }
 
-    const questionCount = Number(count) || 5;
+    const questionCount =
+      Number(count);
 
-    const prompt = `
-Create a quiz for school or college students.
+    if (
+      !questionCount ||
+      questionCount < 1 ||
+      questionCount > 30
+    ) {
+      return res.status(400).json({
+        error:
+          "Question count must be between 1 and 30."
+      });
+    }
+
+    const apiKey =
+      process.env.GROQ_API_KEY;
+
+    if (!apiKey) {
+      return res.status(500).json({
+        error:
+          "GROQ_API_KEY is not configured."
+      });
+    }
+
+    let finalQuiz = null;
+
+    /* Try up to 3 times to get the
+       exact requested number of questions.
+    */
+
+    for (let attempt = 1; attempt <= 3; attempt++) {
+
+      const prompt = `
+Create a professional multiple-choice quiz.
 
 Topic: ${topic}
-Number of questions: ${questionCount}
-Difficulty: ${difficulty || "medium"}
-Question type: ${type || "multiple choice"}
+
+Difficulty: ${difficulty}
+
+Question type: ${type}
+
+IMPORTANT:
+Generate EXACTLY ${questionCount} questions.
+
+Do NOT generate fewer.
+Do NOT generate more.
 
 Return ONLY valid JSON.
 
-Use exactly this format:
+Required format:
 
 {
   "title": "Quiz title",
@@ -154,119 +326,125 @@ Use exactly this format:
     {
       "question": "Question text",
       "options": [
-        "Option 1",
-        "Option 2",
-        "Option 3",
-        "Option 4"
+        "Option A",
+        "Option B",
+        "Option C",
+        "Option D"
       ],
-      "answer": "Correct option"
+      "answer": 0
     }
   ]
 }
 
-Important rules:
-
-1. Create exactly ${questionCount} questions.
-2. Every question must have 4 options.
-3. The answer must exactly match one of the options.
-4. Do not include markdown.
-5. Do not include explanations outside the JSON.
+The "answer" must be the correct option index:
+0 = Option A
+1 = Option B
+2 = Option C
+3 = Option D
 `;
 
-    let quiz = null;
+      const response =
+        await fetch(
+          "https://api.groq.com/openai/v1/chat/completions",
+          {
+            method: "POST",
 
-    // Try up to 3 times
-    for (let attempt = 1; attempt <= 3; attempt++) {
+            headers: {
+              "Content-Type":
+                "application/json",
 
-      console.log(
-        `Generating quiz: attempt ${attempt}/3 for ${questionCount} questions`
-      );
+              "Authorization":
+                `Bearer ${apiKey}`
+            },
 
-      const response = await fetch(
-        "https://api.groq.com/openai/v1/chat/completions",
-        {
-          method: "POST",
+            body: JSON.stringify({
+              model: MODEL,
 
-          headers: {
-            "Content-Type": "application/json",
+              messages: [
+                {
+                  role: "system",
+                  content:
+                    "You create accurate educational quizzes and return valid JSON only."
+                },
 
-            Authorization:
-              `Bearer ${process.env.GROQ_API_KEY}`
-          },
+                {
+                  role: "user",
+                  content: prompt
+                }
+              ],
 
-          body: JSON.stringify({
-            model: MODEL,
+              temperature: 0.7,
 
-            messages: [
-              {
-                role: "user",
-                content: prompt
+              max_tokens: 12000,
+
+              response_format: {
+                type: "json_object"
               }
-            ],
+            })
+          }
+        );
 
-            temperature: 0.2,
-
-            response_format: {
-              type: "json_object"
-            }
-          })
-        }
-      );
-
-      const data = await response.json();
+      const data =
+        await response.json();
 
       if (!response.ok) {
-        console.error("Groq API Error:", data);
+        console.error(
+          "Groq error:",
+          data
+        );
 
-        return res.status(response.status).json({
-          error:
-            data?.error?.message ||
-            "Groq API request failed."
-        });
+        throw new Error(
+          data.error?.message ||
+          "Groq API request failed."
+        );
       }
 
-      const content =
-        data?.choices?.[0]?.message?.content;
+      let content =
+        data.choices?.[0]?.message?.content;
 
       if (!content) {
-        console.log("Groq returned an empty response.");
-        continue;
+        throw new Error(
+          "AI returned empty response."
+        );
       }
 
+      let quiz;
+
       try {
-        quiz = JSON.parse(content);
+        quiz =
+          typeof content === "string"
+            ? JSON.parse(content)
+            : content;
       } catch (error) {
-        console.error("JSON Parse Error:", content);
-        quiz = null;
+
+        console.error(
+          "JSON parse error:",
+          content
+        );
+
         continue;
       }
 
       if (
         quiz &&
-        Array.isArray(quiz.questions) &&
-        quiz.questions.length === questionCount
+        Array.isArray(
+          quiz.questions
+        ) &&
+        quiz.questions.length ===
+          questionCount
       ) {
-        console.log(
-          `Success: Exactly ${questionCount} questions generated.`
-        );
-
+        finalQuiz = quiz;
         break;
       }
 
       console.log(
         `Attempt ${attempt}: AI returned ${
           quiz?.questions?.length || 0
-        } questions instead of ${questionCount}. Retrying...`
+        } questions instead of ${questionCount}.`
       );
-
-      quiz = null;
     }
 
-    if (
-      !quiz ||
-      !Array.isArray(quiz.questions) ||
-      quiz.questions.length !== questionCount
-    ) {
+    if (!finalQuiz) {
       return res.status(500).json({
         error:
           `AI could not generate exactly ${questionCount} questions. Please try again.`
@@ -274,36 +452,39 @@ Important rules:
     }
 
     res.json({
-      quiz
+      success: true,
+      quiz: finalQuiz
     });
 
   } catch (error) {
-    console.error("Server Error:", error);
+
+    console.error(
+      "AI generation error:",
+      error
+    );
 
     res.status(500).json({
-      error: "Something went wrong on the server."
+      error:
+        error.message ||
+        "AI generation failed."
     });
   }
 });
 
+/* ======================================================
+   SERVE WEBSITE
+   ====================================================== */
 
-// ======================================================
-// FRONTEND
-// ======================================================
+app.use(
+  express.static(__dirname)
+);
 
-app.get("/{*splat}", (req, res) => {
-  res.sendFile(
-    path.join(__dirname, "index.html")
-  );
-});
-
-
-// ======================================================
-// START SERVER
-// ======================================================
+/* ======================================================
+   START SERVER
+   ====================================================== */
 
 app.listen(PORT, () => {
   console.log(
-    `Zero Barrier Quiz running at http://localhost:${PORT}`
+    `Zero Barrier Quiz server running on port ${PORT}`
   );
 });

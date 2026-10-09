@@ -13,6 +13,111 @@ app.use(express.json());
 
 app.use(express.static(__dirname));
 
+/*
+  SHARED QUIZ STORAGE
+
+  This allows students on different devices
+  to access quizzes created by the teacher.
+
+  Note:
+  This storage is temporary and will be cleared
+  if the Render server restarts or redeploys.
+*/
+const quizzes = new Map();
+
+
+// ======================================================
+// CREATE / STORE QUIZ
+// ======================================================
+
+app.post("/api/quizzes", (req, res) => {
+  try {
+    const { code, title, questions, method, createdAt } = req.body;
+
+    if (!code) {
+      return res.status(400).json({
+        error: "Quiz code is required."
+      });
+    }
+
+    if (!title) {
+      return res.status(400).json({
+        error: "Quiz title is required."
+      });
+    }
+
+    if (!Array.isArray(questions) || questions.length === 0) {
+      return res.status(400).json({
+        error: "Quiz questions are required."
+      });
+    }
+
+    const quiz = {
+      code: String(code).toUpperCase(),
+      title: String(title),
+      questions,
+      method: method || "Quiz",
+      createdAt: createdAt || new Date().toISOString()
+    };
+
+    quizzes.set(quiz.code, quiz);
+
+    console.log(
+      `Quiz stored successfully: ${quiz.code} (${quiz.questions.length} questions)`
+    );
+
+    res.json({
+      success: true,
+      quiz
+    });
+
+  } catch (error) {
+    console.error("Store Quiz Error:", error);
+
+    res.status(500).json({
+      error: "Could not store quiz."
+    });
+  }
+});
+
+
+// ======================================================
+// GET QUIZ BY CODE
+// ======================================================
+
+app.get("/api/quizzes/:code", (req, res) => {
+  try {
+    const code = String(req.params.code).trim().toUpperCase();
+
+    const quiz = quizzes.get(code);
+
+    if (!quiz) {
+      return res.status(404).json({
+        error: "Quiz not found. Please check the quiz code."
+      });
+    }
+
+    console.log(`Quiz requested: ${code}`);
+
+    res.json({
+      success: true,
+      quiz
+    });
+
+  } catch (error) {
+    console.error("Get Quiz Error:", error);
+
+    res.status(500).json({
+      error: "Could not retrieve quiz."
+    });
+  }
+});
+
+
+// ======================================================
+// AI QUIZ GENERATOR
+// ======================================================
+
 app.post("/api/generate-quiz", async (req, res) => {
   try {
     const { topic, count, difficulty, type } = req.body;
@@ -70,7 +175,7 @@ Important rules:
 
     let quiz = null;
 
-    // Try up to 3 times to get exactly the requested number
+    // Try up to 3 times
     for (let attempt = 1; attempt <= 3; attempt++) {
 
       console.log(
@@ -157,7 +262,6 @@ Important rules:
       quiz = null;
     }
 
-    // If AI still did not return the exact number
     if (
       !quiz ||
       !Array.isArray(quiz.questions) ||
@@ -169,7 +273,6 @@ Important rules:
       });
     }
 
-    // Send the quiz only when the exact number is available
     res.json({
       quiz
     });
@@ -183,11 +286,21 @@ Important rules:
   }
 });
 
+
+// ======================================================
+// FRONTEND
+// ======================================================
+
 app.get("/{*splat}", (req, res) => {
   res.sendFile(
     path.join(__dirname, "index.html")
   );
 });
+
+
+// ======================================================
+// START SERVER
+// ======================================================
 
 app.listen(PORT, () => {
   console.log(

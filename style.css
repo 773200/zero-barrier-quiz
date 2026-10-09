@@ -157,7 +157,7 @@ body{
 .hero::before{
   content:"";position:absolute;z-index:-2;width:min(700px,75vw);height:min(700px,75vw);
   left:50%;top:48%;transform:translate(-50%,-50%);
-  background:url("images/logo.png") center/contain no-repeat;
+  background-image: url("logo.png") center/contain no-repeat;
   opacity:.055;filter:grayscale(1)
 }
 .hero::after{

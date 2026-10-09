@@ -1,176 +1,344 @@
-let quizzes=JSON.parse(localStorage.getItem("zbq_quizzes")||"[]");
-let currentQuiz=null;
-let currentStudent="";
-let createMode="ai";
-let leaderboards=JSON.parse(localStorage.getItem("zbq_leaderboards")||"{}");
+let quizzes =
+  JSON.parse(
+    localStorage.getItem("zbq_quizzes") || "[]"
+  );
 
-function saveLeaderboards(){
-  localStorage.setItem("zbq_leaderboards",JSON.stringify(leaderboards));
+let currentQuiz = null;
+
+let currentStudent = "";
+
+let createMode = "ai";
+
+let leaderboards =
+  JSON.parse(
+    localStorage.getItem(
+      "zbq_leaderboards"
+    ) || "{}"
+  );
+
+
+/* ======================================================
+   LOCAL STORAGE
+   ====================================================== */
+
+function saveLeaderboards() {
+  localStorage.setItem(
+    "zbq_leaderboards",
+    JSON.stringify(leaderboards)
+  );
 }
 
-function saveQuizzes(){
-  localStorage.setItem("zbq_quizzes",JSON.stringify(quizzes));
+
+function saveQuizzes() {
+  localStorage.setItem(
+    "zbq_quizzes",
+    JSON.stringify(quizzes)
+  );
 }
 
-function showView(id){
-  document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
-  document.getElementById(id).classList.add("active");
-  window.scrollTo({top:0,behavior:"smooth"});
+
+/* ======================================================
+   VIEW MANAGEMENT
+   ====================================================== */
+
+function showView(id) {
+
+  document
+    .querySelectorAll(".view")
+    .forEach(v =>
+      v.classList.remove("active")
+    );
+
+  document
+    .getElementById(id)
+    .classList.add("active");
+
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth"
+  });
 }
 
-function showHome(){
+
+function showHome() {
   showView("homeView");
 }
 
-function openTeacher(){
+
+function openTeacher() {
+
   showView("teacherView");
+
   selectCreateMode("ai");
 }
 
-function openStudent(){
+
+function openStudent() {
+
   showView("studentView");
 }
 
-function openAdmin(){
+
+function openAdmin() {
+
   showView("adminView");
+
   renderAdmin();
 }
 
-function selectCreateMode(mode){
-  createMode=mode;
-  document.getElementById("aiModeCard").classList.toggle("selected",mode==="ai");
-  document.getElementById("manualModeCard").classList.toggle("selected",mode==="manual");
-  document.getElementById("aiCreator").classList.toggle("hidden",mode!=="ai");
-  document.getElementById("manualCreator").classList.toggle("hidden",mode!=="manual");
 
-  if(mode==="manual" && !document.querySelector(".question-editor")){
+/* ======================================================
+   CREATE MODE
+   ====================================================== */
+
+function selectCreateMode(mode) {
+
+  createMode = mode;
+
+  document
+    .getElementById("aiModeCard")
+    .classList.toggle(
+      "selected",
+      mode === "ai"
+    );
+
+  document
+    .getElementById("manualModeCard")
+    .classList.toggle(
+      "selected",
+      mode === "manual"
+    );
+
+  document
+    .getElementById("aiCreator")
+    .classList.toggle(
+      "hidden",
+      mode !== "ai"
+    );
+
+  document
+    .getElementById("manualCreator")
+    .classList.toggle(
+      "hidden",
+      mode !== "manual"
+    );
+
+  if (
+    mode === "manual" &&
+    !document.querySelector(
+      ".question-editor"
+    )
+  ) {
+
     addManualQuestion();
   }
 }
 
 
-// ======================================================
-// AI QUIZ GENERATION
-// ======================================================
+/* ======================================================
+   AI QUIZ GENERATION
+   ====================================================== */
 
-async function generateAIQuiz(){
+async function generateAIQuiz() {
 
-  const topic=document.getElementById("aiTopic").value.trim();
-  const count=Number(document.getElementById("aiCount").value);
-  const difficulty=document.getElementById("aiDifficulty").value;
-  const type=document.getElementById("aiType").value;
-  const status=document.getElementById("aiStatus");
+  const topic =
+    document
+      .getElementById("aiTopic")
+      .value
+      .trim();
 
-  if(!topic){
-    status.innerHTML='<div class="status error">Please enter a topic.</div>';
-    return;
-  }
-
-  if(count<1||count>30){
-    status.innerHTML='<div class="status error">Choose between 1 and 30 questions.</div>';
-    return;
-  }
-
-  status.innerHTML='<div class="status">🤖 AI is creating your quiz. Please wait...</div>';
-
-  try{
-
-    const res=await fetch(
-      "/api/generate-quiz",
-      {
-        method:"POST",
-        headers:{
-          "Content-Type":"application/json"
-        },
-        body:JSON.stringify({
-          topic,
-          count,
-          difficulty,
-          type
-        })
-      }
+  const count =
+    Number(
+      document
+        .getElementById("aiCount")
+        .value
     );
 
-    const data=await res.json();
+  const difficulty =
+    document
+      .getElementById("aiDifficulty")
+      .value;
 
-    if(!res.ok){
+  const type =
+    document
+      .getElementById("aiType")
+      .value;
+
+  const status =
+    document
+      .getElementById("aiStatus");
+
+
+  if (!topic) {
+
+    status.innerHTML =
+      '<div class="status error">' +
+      'Please enter a topic.' +
+      '</div>';
+
+    return;
+  }
+
+
+  if (
+    count < 1 ||
+    count > 30
+  ) {
+
+    status.innerHTML =
+      '<div class="status error">' +
+      'Choose between 1 and 30 questions.' +
+      '</div>';
+
+    return;
+  }
+
+
+  status.innerHTML =
+    '<div class="status">' +
+    '🤖 AI is creating your quiz. Please wait...' +
+    '</div>';
+
+
+  try {
+
+    const res =
+      await fetch(
+        "/api/generate-quiz",
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json"
+          },
+
+          body: JSON.stringify({
+            topic,
+            count,
+            difficulty,
+            type
+          })
+        }
+      );
+
+
+    const data =
+      await res.json();
+
+
+    if (!res.ok) {
+
       throw new Error(
-        data.error||"AI generation failed"
+        data.error ||
+        "AI generation failed"
       );
     }
 
-    const quiz=normalizeQuiz(
-      data.quiz||data
-    );
+
+    const quiz =
+      normalizeQuiz(
+        data.quiz || data
+      );
+
 
     await createQuiz(
       quiz,
       "AI Generated"
     );
 
-    status.innerHTML=
-      '<div class="status success">Quiz generated successfully.</div>';
 
-  }catch(err){
+    status.innerHTML =
+      '<div class="status success">' +
+      'Quiz generated successfully.' +
+      '</div>';
 
-    status.innerHTML=
-      '<div class="status error">❌ '+
-      escapeHtml(err.message)+
-      '<br><small>Please try again.</small></div>';
+
+  } catch (err) {
+
+    status.innerHTML =
+      '<div class="status error">' +
+      '❌ ' +
+      escapeHtml(
+        err.message
+      ) +
+      '<br><small>Please try again.</small>' +
+      '</div>';
   }
 }
 
 
-// ======================================================
-// NORMALIZE QUIZ
-// ======================================================
+/* ======================================================
+   NORMALIZE QUIZ
+   ====================================================== */
 
-function normalizeQuiz(q){
+function normalizeQuiz(q) {
 
-  const questions=(q.questions||[]).map(x=>({
+  const questions =
+    (q.questions || [])
+      .map(x => ({
 
-    question:String(
-      x.question||"Question"
-    ),
+        question:
+          String(
+            x.question ||
+            "Question"
+          ),
 
-    options:Array.isArray(x.options)
-      ? x.options.map(String)
-      : ["True","False"],
+        options:
+          Array.isArray(
+            x.options
+          )
+            ? x.options.map(
+                String
+              )
+            : [
+                "True",
+                "False"
+              ],
 
-    answer:Number.isInteger(x.answer)
-      ? x.answer
-      : 0
-  }));
+        answer:
+          Number.isInteger(
+            x.answer
+          )
+            ? x.answer
+            : 0
+      }));
+
 
   return {
-    title:String(
-      q.title||"AI Quiz"
-    ),
+
+    title:
+      String(
+        q.title ||
+        "AI Quiz"
+      ),
+
     questions
   };
 }
 
 
-// ======================================================
-// CREATE QUIZ CODE
-// ======================================================
+/* ======================================================
+   CREATE QUIZ CODE
+   ====================================================== */
 
-function makeCode(){
+function makeCode() {
 
   let code;
 
-  do{
+  do {
 
-    code=
-      "ZBQ"+
+    code =
+      "ZBQ" +
       Math.floor(
-        1000+
-        Math.random()*9000
+        1000 +
+        Math.random() * 9000
       );
 
-  }while(
+  } while (
     quizzes.some(
-      q=>q.code===code
+      q =>
+        q.code === code
     )
   );
 
@@ -178,46 +346,57 @@ function makeCode(){
 }
 
 
-// ======================================================
-// CREATE + SAVE QUIZ
-// ======================================================
+/* ======================================================
+   CREATE + SAVE QUIZ
+   ====================================================== */
 
-async function createQuiz(quiz,method){
+async function createQuiz(
+  quiz,
+  method
+) {
 
-  quiz.code=makeCode();
+  quiz.code =
+    makeCode();
 
-  quiz.method=method;
+  quiz.method =
+    method;
 
-  quiz.createdAt=
+  quiz.createdAt =
     new Date().toISOString();
 
-  // Save locally for teacher/admin
+
+  /* Save locally */
   quizzes.push(quiz);
 
   saveQuizzes();
 
-  // Send quiz to shared server
-  try{
 
-    const response=
+  /* Upload to server */
+
+  try {
+
+    const response =
       await fetch(
         "/api/quizzes",
         {
-          method:"POST",
+          method: "POST",
 
-          headers:{
+          headers: {
             "Content-Type":
               "application/json"
           },
 
-          body:JSON.stringify(quiz)
+          body:
+            JSON.stringify(quiz)
         }
       );
 
-    const data=
+
+    const data =
       await response.json();
 
-    if(!response.ok){
+
+    if (!response.ok) {
 
       console.error(
         "Server quiz save failed:",
@@ -225,412 +404,535 @@ async function createQuiz(quiz,method){
       );
 
       throw new Error(
-        data.error||
+        data.error ||
         "Quiz could not be shared."
       );
     }
+
 
     console.log(
       "Quiz successfully stored on server:",
       quiz.code
     );
 
-  }catch(error){
+
+  } catch (error) {
 
     console.error(
       "Shared quiz error:",
       error
     );
 
+
     alert(
       "Quiz was created, but it could not be uploaded to the server. Students on other devices may not be able to join."
     );
   }
 
+
   showCreatedQuiz(quiz);
 }
 
 
-// ======================================================
-// SHOW CREATED QUIZ
-// ======================================================
+/* ======================================================
+   SHOW CREATED QUIZ
+   ====================================================== */
 
-function showCreatedQuiz(quiz){
+function showCreatedQuiz(quiz) {
 
-  const panel=
+  const panel =
     document.getElementById(
       "createdQuizPanel"
     );
 
-  panel.classList.remove("hidden");
 
-  panel.innerHTML=
-    '<h2>🎉 Quiz Created Successfully!</h2>'+
+  panel.classList.remove(
+    "hidden"
+  );
 
-    '<div class="code-box">'+
-      '<div>Your Quiz Code</div>'+
-      '<div class="join-code">'+
-        quiz.code+
-      '</div>'+
-      '<div>'+
-        'Share this code with your students.'+
-      '</div>'+
-    '</div>'+
 
-    '<h3>'+
-      escapeHtml(quiz.title)+
-    '</h3>'+
+  panel.innerHTML =
 
-    '<p>'+
-      quiz.questions.length+
-      ' questions • '+
-      escapeHtml(quiz.method)+
-    '</p>'+
+    '<h2>🎉 Quiz Created Successfully!</h2>' +
 
-    '<button class="secondary-btn" onclick="openStudent()">'+
-      'Go to Student Join'+
-    '</button>'+
+    '<div class="code-box">' +
 
-    '<button class="secondary-btn" onclick="showLeaderboard(\''+
-      quiz.code+
-    '\')">'+
-      '🏆 View Leaderboard'+
+      '<div>Your Quiz Code</div>' +
+
+      '<div class="join-code">' +
+        quiz.code +
+      '</div>' +
+
+      '<div>' +
+        'Share this code with your students.' +
+      '</div>' +
+
+    '</div>' +
+
+    '<h3>' +
+      escapeHtml(
+        quiz.title
+      ) +
+    '</h3>' +
+
+    '<p>' +
+      quiz.questions.length +
+      ' questions • ' +
+      escapeHtml(
+        quiz.method
+      ) +
+    '</p>' +
+
+    '<button class="secondary-btn" onclick="openStudent()">' +
+      'Go to Student Join' +
+    '</button>' +
+
+    '<button class="secondary-btn" onclick="showLeaderboard(\'' +
+      quiz.code +
+    '\')">' +
+      '🏆 View Leaderboard' +
     '</button>';
 
+
   panel.scrollIntoView({
-    behavior:"smooth"
+    behavior: "smooth"
   });
 }
 
 
-// ======================================================
-// MANUAL QUESTION
-// ======================================================
+/* ======================================================
+   MANUAL QUESTION
+   ====================================================== */
 
-function addManualQuestion(){
+function addManualQuestion() {
 
-  const box=
+  const box =
     document.getElementById(
       "manualQuestions"
     );
 
-  const n=
+
+  const n =
     box.querySelectorAll(
       ".question-editor"
-    ).length+1;
+    ).length + 1;
 
-  const el=
+
+  const el =
     document.createElement(
       "div"
     );
 
-  el.className=
+
+  el.className =
     "question-editor";
 
-  el.innerHTML=
-    '<h3>Question '+n+'</h3>'+
 
-    '<input class="mq-text" placeholder="Enter your question">'+
+  el.innerHTML =
 
-    '<div class="option-row">'+
-      '<input class="mq-option" placeholder="Option A">'+
-      '<input type="radio" name="correct'+n+'" value="0" checked> Correct'+
-    '</div>'+
+    '<h3>Question ' +
+      n +
+    '</h3>' +
 
-    '<div class="option-row">'+
-      '<input class="mq-option" placeholder="Option B">'+
-      '<input type="radio" name="correct'+n+'" value="1"> Correct'+
-    '</div>'+
+    '<input class="mq-text" placeholder="Enter your question">' +
 
-    '<div class="option-row">'+
-      '<input class="mq-option" placeholder="Option C">'+
-      '<input type="radio" name="correct'+n+'" value="2"> Correct'+
-    '</div>'+
+    '<div class="option-row">' +
+      '<input class="mq-option" placeholder="Option A">' +
+      '<input type="radio" name="correct' +
+        n +
+      '" value="0" checked> Correct' +
+    '</div>' +
 
-    '<div class="option-row">'+
-      '<input class="mq-option" placeholder="Option D">'+
-      '<input type="radio" name="correct'+n+'" value="3"> Correct'+
+    '<div class="option-row">' +
+      '<input class="mq-option" placeholder="Option B">' +
+      '<input type="radio" name="correct' +
+        n +
+      '" value="1"> Correct' +
+    '</div>' +
+
+    '<div class="option-row">' +
+      '<input class="mq-option" placeholder="Option C">' +
+      '<input type="radio" name="correct' +
+        n +
+      '" value="2"> Correct' +
+    '</div>' +
+
+    '<div class="option-row">' +
+      '<input class="mq-option" placeholder="Option D">' +
+      '<input type="radio" name="correct' +
+        n +
+      '" value="3"> Correct' +
     '</div>';
+
 
   box.appendChild(el);
 }
 
 
-// ======================================================
-// SAVE MANUAL QUIZ
-// ======================================================
+/* ======================================================
+   SAVE MANUAL QUIZ
+   ====================================================== */
 
-async function saveManualQuiz(){
+async function saveManualQuiz() {
 
-  const title=
-    document.getElementById(
-      "manualTitle"
-    ).value.trim()||
+  const title =
+    document
+      .getElementById(
+        "manualTitle"
+      )
+      .value
+      .trim() ||
     "My Quiz";
 
-  const editors=[
+
+  const editors = [
     ...document.querySelectorAll(
       ".question-editor"
     )
   ];
 
-  const questions=[];
 
-  for(
+  const questions = [];
+
+
+  for (
     const e of editors
-  ){
+  ) {
 
-    const text=
+    const text =
       e.querySelector(
         ".mq-text"
       ).value.trim();
 
-    const opts=[
+
+    const opts = [
       ...e.querySelectorAll(
         ".mq-option"
       )
     ].map(
-      x=>x.value.trim()
+      x =>
+        x.value.trim()
     );
 
-    const correct=
+
+    const correct =
       Number(
         e.querySelector(
           "input[type=radio]:checked"
         ).value
       );
 
-    if(
-      !text||
-      opts.some(x=>!x)
-    ){
 
-      document.getElementById(
-        "manualStatus"
-      ).innerHTML=
-        '<div class="status error">'+
-        'Please complete every question and option.'+
-        '</div>';
+    if (
+      !text ||
+      opts.some(
+        x => !x
+      )
+    ) {
+
+      document
+        .getElementById(
+          "manualStatus"
+        )
+        .innerHTML =
+          '<div class="status error">' +
+          'Please complete every question and option.' +
+          '</div>';
 
       return;
     }
 
+
     questions.push({
-      question:text,
-      options:opts,
-      answer:correct
+
+      question:
+        text,
+
+      options:
+        opts,
+
+      answer:
+        correct
     });
   }
 
-  if(!questions.length){
+
+  if (
+    !questions.length
+  ) {
     return;
   }
 
+
   await createQuiz(
+
     {
       title,
       questions
     },
+
     "Teacher Created"
   );
 
-  document.getElementById(
-    "manualStatus"
-  ).innerHTML=
-    '<div class="status success">'+
-    'Your quiz has been saved.'+
-    '</div>';
+
+  document
+    .getElementById(
+      "manualStatus"
+    )
+    .innerHTML =
+      '<div class="status success">' +
+      'Your quiz has been saved.' +
+      '</div>';
 }
 
 
-// ======================================================
-// STUDENT JOIN
-// ======================================================
+/* ======================================================
+   STUDENT JOIN
+   ====================================================== */
 
-async function joinQuiz(){
+async function joinQuiz() {
 
-  const name=
-    document.getElementById(
-      "studentName"
-    ).value.trim();
+  const name =
+    document
+      .getElementById(
+        "studentName"
+      )
+      .value
+      .trim();
 
-  const code=
-    document.getElementById(
-      "studentCode"
-    ).value.trim().toUpperCase();
 
-  const msg=
+  const code =
+    document
+      .getElementById(
+        "studentCode"
+      )
+      .value
+      .trim()
+      .toUpperCase();
+
+
+  const msg =
     document.getElementById(
       "studentMessage"
     );
 
-  if(!name||!code){
 
-    msg.innerHTML=
-      '<div class="status error">'+
-      'Please enter your name and quiz code.'+
+  if (
+    !name ||
+    !code
+  ) {
+
+    msg.innerHTML =
+      '<div class="status error">' +
+      'Please enter your name and quiz code.' +
       '</div>';
 
     return;
   }
 
-  msg.innerHTML=
-    '<div class="status">'+
-    '🔍 Finding your quiz...'+
+
+  msg.innerHTML =
+    '<div class="status">' +
+    '🔍 Finding your quiz...' +
     '</div>';
 
-  try{
 
-    const response=
+  try {
+
+    const response =
       await fetch(
-        "/api/quizzes/"+
-        encodeURIComponent(code)
+        "/api/quizzes/" +
+        encodeURIComponent(
+          code
+        )
       );
 
-    const data=
+
+    const data =
       await response.json();
 
-    if(!response.ok){
+
+    if (!response.ok) {
 
       throw new Error(
-        data.error||
+        data.error ||
         "Quiz not found."
       );
     }
 
-    const quiz=data.quiz;
 
-    if(
-      !quiz||
+    const quiz =
+      data.quiz;
+
+
+    if (
+      !quiz ||
       !Array.isArray(
         quiz.questions
       )
-    ){
+    ) {
 
       throw new Error(
         "Invalid quiz data received."
       );
     }
 
-    currentQuiz=quiz;
 
-    currentStudent=name;
+    currentQuiz =
+      quiz;
+
+    currentStudent =
+      name;
+
 
     renderQuiz();
 
-  }catch(error){
+
+  } catch (error) {
 
     console.error(
       "Join Quiz Error:",
       error
     );
 
-    msg.innerHTML=
-      '<div class="status error">'+
-      '❌ '+
+
+    msg.innerHTML =
+      '<div class="status error">' +
+      '❌ ' +
       escapeHtml(
-        error.message||
+        error.message ||
         "Quiz not found."
-      )+
+      ) +
       '</div>';
   }
 }
 
 
-// ======================================================
-// RENDER QUIZ
-// ======================================================
+/* ======================================================
+   RENDER QUIZ
+   ====================================================== */
 
-function renderQuiz(){
+function renderQuiz() {
 
   showView(
     "quizView"
   );
 
-  document.getElementById(
-    "quizTitle"
-  ).textContent=
-    currentQuiz.title;
 
-  document.getElementById(
-    "quizStudent"
-  ).textContent=
-    "Student: "+
-    currentStudent+
-    " • Code: "+
-    currentQuiz.code;
+  document
+    .getElementById(
+      "quizTitle"
+    )
+    .textContent =
+      currentQuiz.title;
 
-  document.getElementById(
-    "quizResult"
-  ).innerHTML="";
 
-  document.getElementById(
-    "quizQuestions"
-  ).innerHTML=
-    currentQuiz.questions.map(
-      (q,i)=>
+  document
+    .getElementById(
+      "quizStudent"
+    )
+    .textContent =
+      "Student: " +
+      currentStudent +
+      " • Code: " +
+      currentQuiz.code;
 
-        '<div class="question-card">'+
 
-          '<h3>'+
-            (i+1)+
-            ". "+
-            escapeHtml(
-              q.question
-            )+
-          '</h3>'+
+  document
+    .getElementById(
+      "quizResult"
+    )
+    .innerHTML =
+      "";
 
-          q.options.map(
-            (o,j)=>
 
-              '<label class="quiz-option">'+
+  document
+    .getElementById(
+      "quizQuestions"
+    )
+    .innerHTML =
 
-                '<input type="radio" name="q'+
-                i+
-                '" value="'+
-                j+
-                '">'+
+      currentQuiz.questions
+        .map(
+          (q, i) =>
 
-                escapeHtml(o)+
+            '<div class="question-card">' +
 
-              '</label>'
+              '<h3>' +
+                (i + 1) +
+                ". " +
+                escapeHtml(
+                  q.question
+                ) +
+              '</h3>' +
 
-          ).join("")+
+              q.options
+                .map(
+                  (o, j) =>
 
-        '</div>'
+                    '<label class="quiz-option">' +
 
-    ).join("");
+                      '<input type="radio" name="q' +
+                        i +
+                      '" value="' +
+                        j +
+                      '">' +
+
+                      escapeHtml(o) +
+
+                    '</label>'
+                )
+                .join("") +
+
+            '</div>'
+        )
+        .join("");
 }
 
 
-// ======================================================
-// SUBMIT QUIZ
-// ======================================================
+/* ======================================================
+   SUBMIT QUIZ
+   ====================================================== */
 
-function submitQuiz(){
+async function submitQuiz() {
 
-  let score=0;
+  if (!currentQuiz) {
 
-  let answered=0;
+    alert(
+      "No quiz is currently open."
+    );
+
+    return;
+  }
+
+
+  let score = 0;
+
+  let answered = 0;
+
 
   currentQuiz.questions.forEach(
-    (q,i)=>{
+    (q, i) => {
 
-      const chosen=
+      const chosen =
         document.querySelector(
-          'input[name="q'+
-          i+
+          'input[name="q' +
+          i +
           '"]:checked'
         );
 
-      if(chosen){
+
+      if (chosen) {
 
         answered++;
 
-        if(
-          Number(chosen.value)===
+
+        if (
+          Number(
+            chosen.value
+          ) ===
           q.answer
-        ){
+        ) {
 
           score++;
         }
@@ -638,267 +940,653 @@ function submitQuiz(){
     }
   );
 
-  const total=
+
+  const total =
     currentQuiz.questions.length;
 
-  const pct=
-    Math.round(
-      score/total*100
+
+  const pct =
+    total > 0
+      ? Math.round(
+          (score / total) *
+          100
+        )
+      : 0;
+
+
+  const resultBox =
+    document.getElementById(
+      "quizResult"
     );
 
-  if(
-    !leaderboards[
-      currentQuiz.code
-    ]
-  ){
 
-    leaderboards[
-      currentQuiz.code
-    ]=[];
-  }
-
-  leaderboards[
-    currentQuiz.code
-  ].push({
-
-    name:
-      currentStudent,
-
-    score:
-      score,
-
-    total:
-      total,
-
-    percentage:
-      pct,
-
-    submittedAt:
-      new Date().toISOString()
-  });
-
-  leaderboards[
-    currentQuiz.code
-  ].sort(
-    (a,b)=>{
-
-      if(
-        b.score!==a.score
-      ){
-
-        return b.score-a.score;
-      }
-
-      return new Date(
-        a.submittedAt
-      )-
-      new Date(
-        b.submittedAt
-      );
-    }
-  );
-
-  saveLeaderboards();
-
-  const studentResult=
-    leaderboards[
-      currentQuiz.code
-    ].findIndex(
-      r=>
-        r.name===
-        currentStudent&&
-        r.score===
-        score
-    );
-
-  const rank=
-    studentResult+1;
-
-  document.getElementById(
-    "quizResult"
-  ).innerHTML=
-
-    '<div class="result-box">'+
-
-      '<h2>🎉 Quiz Completed</h2>'+
-
-      '<p><strong>'+
-        escapeHtml(
-          currentStudent
-        )+
-      '</strong>, your score is '+
-
-      '<strong>'+
-        score+
-        '/'+
-        total+
-      '</strong> ('+
-        pct+
-        '%).</p>'+
-
-      '<p>You answered '+
-        answered+
-        ' of '+
-        total+
-        ' questions.</p>'+
-
-      '<div class="student-rank">'+
-        '🏆 Your Rank: <strong>#'+
-        rank+
-        '</strong>'+
-      '</div>'+
-
-      '<button class="secondary-btn leaderboard-btn" onclick="showLeaderboard(\''+
-        currentQuiz.code+
-      '\')">'+
-        '🏆 View Leaderboard'+
-      '</button>'+
-
+  resultBox.innerHTML =
+    '<div class="status">' +
+    '⏳ Saving your result...' +
     '</div>';
 
-  document
-    .querySelectorAll(
-      "#quizQuestions input"
-    )
-    .forEach(
-      input=>{
-        input.disabled=true;
-      }
+
+  try {
+
+    /* Send result to shared server */
+
+    const response =
+      await fetch(
+        "/api/quizzes/" +
+        encodeURIComponent(
+          currentQuiz.code
+        ) +
+        "/results",
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json"
+          },
+
+          body:
+            JSON.stringify({
+
+              name:
+                currentStudent,
+
+              score:
+                score,
+
+              total:
+                total,
+
+              percentage:
+                pct
+            })
+        }
+      );
+
+
+    const data =
+      await response.json();
+
+
+    if (!response.ok) {
+
+      throw new Error(
+        data.error ||
+        "Could not save result."
+      );
+    }
+
+
+    /* Save server leaderboard locally
+       only as a cache */
+
+    leaderboards[
+      currentQuiz.code
+    ] =
+      data.leaderboard || [];
+
+    saveLeaderboards();
+
+
+    const rank =
+      data.result?.rank ||
+      0;
+
+
+    resultBox.innerHTML =
+
+      '<div class="result-box">' +
+
+        '<h2>🎉 Quiz Completed</h2>' +
+
+        '<p><strong>' +
+          escapeHtml(
+            currentStudent
+          ) +
+        '</strong>, your score is ' +
+
+        '<strong>' +
+          score +
+          '/' +
+          total +
+        '</strong> (' +
+          pct +
+        '%).</p>' +
+
+        '<p>You answered ' +
+          answered +
+          ' of ' +
+          total +
+          ' questions.</p>' +
+
+        '<div class="student-rank">' +
+          '🏆 Your Rank: <strong>#' +
+          rank +
+          '</strong>' +
+        '</div>' +
+
+        '<button class="secondary-btn leaderboard-btn" onclick="showLeaderboard(\'' +
+          currentQuiz.code +
+        '\')">' +
+          '🏆 View Leaderboard' +
+        '</button>' +
+
+      '</div>';
+
+
+    /* Disable questions */
+
+    document
+      .querySelectorAll(
+        "#quizQuestions input"
+      )
+      .forEach(
+        input => {
+          input.disabled = true;
+        }
+      );
+
+
+    window.scrollTo({
+
+      top:
+        document.body
+          .scrollHeight,
+
+      behavior:
+        "smooth"
+    });
+
+
+  } catch (error) {
+
+    console.error(
+      "Submit result error:",
+      error
     );
 
-  window.scrollTo({
-    top:
-      document.body.scrollHeight,
 
-    behavior:
-      "smooth"
-  });
+    resultBox.innerHTML =
+      '<div class="status error">' +
+      '❌ ' +
+      escapeHtml(
+        error.message ||
+        "Could not save your result."
+      ) +
+      '<br>' +
+      '<small>Please try submitting again.</small>' +
+      '</div>';
+  }
 }
 
 
-// ======================================================
-// ADMIN
-// ======================================================
+/* ======================================================
+   GET SHARED LEADERBOARD
+   ====================================================== */
 
-function renderAdmin(){
+async function getSharedLeaderboard(
+  code
+) {
 
-  const list=
+  const response =
+    await fetch(
+      "/api/quizzes/" +
+      encodeURIComponent(
+        code
+      ) +
+      "/results"
+    );
+
+
+  const data =
+    await response.json();
+
+
+  if (!response.ok) {
+
+    throw new Error(
+      data.error ||
+      "Could not load leaderboard."
+    );
+  }
+
+
+  return data;
+}
+
+
+/* ======================================================
+   SHOW LEADERBOARD
+   ====================================================== */
+
+async function showLeaderboard(
+  code
+) {
+
+  try {
+
+    const data =
+      await getSharedLeaderboard(
+        code
+      );
+
+
+    const leaderboard =
+      data.leaderboard || [];
+
+
+    /* Remove old modal */
+
+    const old =
+      document.getElementById(
+        "sharedLeaderboardModal"
+      );
+
+    if (old) {
+      old.remove();
+    }
+
+
+    const modal =
+      document.createElement(
+        "div"
+      );
+
+
+    modal.id =
+      "sharedLeaderboardModal";
+
+
+    modal.style.position =
+      "fixed";
+
+    modal.style.inset =
+      "0";
+
+    modal.style.background =
+      "rgba(0,0,0,0.65)";
+
+    modal.style.zIndex =
+      "99999";
+
+    modal.style.display =
+      "flex";
+
+    modal.style.alignItems =
+      "center";
+
+    modal.style.justifyContent =
+      "center";
+
+    modal.style.padding =
+      "20px";
+
+
+    const box =
+      document.createElement(
+        "div"
+      );
+
+
+    box.style.background =
+      "#ffffff";
+
+    box.style.width =
+      "min(700px, 95vw)";
+
+    box.style.maxHeight =
+      "85vh";
+
+    box.style.overflowY =
+      "auto";
+
+    box.style.borderRadius =
+      "18px";
+
+    box.style.padding =
+      "25px";
+
+    box.style.boxShadow =
+      "0 20px 60px rgba(0,0,0,0.3)";
+
+
+    let rows = "";
+
+
+    if (
+      leaderboard.length === 0
+    ) {
+
+      rows =
+        '<tr>' +
+          '<td colspan="4" style="text-align:center;padding:20px;">' +
+            'No students have submitted yet.' +
+          '</td>' +
+        '</tr>';
+
+    } else {
+
+      rows =
+        leaderboard
+          .map(
+            item =>
+
+              '<tr>' +
+
+                '<td style="padding:10px;text-align:center;">' +
+                  '#' +
+                  item.rank +
+                '</td>' +
+
+                '<td style="padding:10px;">' +
+                  escapeHtml(
+                    item.name
+                  ) +
+                '</td>' +
+
+                '<td style="padding:10px;text-align:center;">' +
+                  item.score +
+                  '/' +
+                  item.total +
+                '</td>' +
+
+                '<td style="padding:10px;text-align:center;">' +
+                  item.percentage +
+                  '%' +
+                '</td>' +
+
+              '</tr>'
+          )
+          .join("");
+    }
+
+
+    box.innerHTML =
+
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:15px;">' +
+
+        '<div>' +
+
+          '<h2 style="margin:0;">🏆 Leaderboard</h2>' +
+
+          '<p style="margin:5px 0;color:#666;">' +
+            'Quiz Code: ' +
+            escapeHtml(code) +
+          '</p>' +
+
+        '</div>' +
+
+        '<button id="closeLeaderboard" class="secondary-btn">' +
+          '✕ Close' +
+        '</button>' +
+
+      '</div>' +
+
+      '<p style="font-weight:600;">' +
+        '👥 Participants: ' +
+        data.participants +
+      '</p>' +
+
+      '<div style="overflow-x:auto;">' +
+
+        '<table style="width:100%;border-collapse:collapse;">' +
+
+          '<thead>' +
+
+            '<tr style="background:#f2f6ff;">' +
+
+              '<th style="padding:10px;">Rank</th>' +
+
+              '<th style="padding:10px;text-align:left;">Student</th>' +
+
+              '<th style="padding:10px;">Score</th>' +
+
+              '<th style="padding:10px;">Percentage</th>' +
+
+            '</tr>' +
+
+          '</thead>' +
+
+          '<tbody>' +
+            rows +
+          '</tbody>' +
+
+        '</table>' +
+
+      '</div>';
+
+
+    modal.appendChild(
+      box
+    );
+
+
+    document.body.appendChild(
+      modal
+    );
+
+
+    document
+      .getElementById(
+        "closeLeaderboard"
+      )
+      .onclick =
+        () => modal.remove();
+
+
+    modal.onclick =
+      event => {
+
+        if (
+          event.target ===
+          modal
+        ) {
+
+          modal.remove();
+        }
+      };
+
+
+  } catch (error) {
+
+    console.error(
+      "Leaderboard error:",
+      error
+    );
+
+
+    alert(
+      "❌ " +
+      (
+        error.message ||
+        "Could not load leaderboard."
+      )
+    );
+  }
+}
+
+
+/* ======================================================
+   ADMIN
+   ====================================================== */
+
+async function renderAdmin() {
+
+  const list =
     document.getElementById(
       "adminList"
     );
 
-  if(!quizzes.length){
 
-    list.innerHTML=
-      "<p class='muted'>No quizzes created on this browser yet.</p>";
+  if (!quizzes.length) {
+
+    list.innerHTML =
+      "<p class='muted'>" +
+      "No quizzes created on this browser yet." +
+      "</p>";
 
     return;
   }
 
-  list.innerHTML=
-    quizzes.map(
-      q=>{
 
-        const results=
-          leaderboards[
-            q.code
-          ]||[];
+  list.innerHTML =
+    "<p class='muted'>⏳ Loading shared quiz results...</p>";
 
-        return `
 
-          <div class="admin-item">
+  const cards =
+    await Promise.all(
 
-            <div>
+      quizzes.map(
+        async q => {
 
-              <strong>
-                ${escapeHtml(q.title)}
-              </strong>
+          let participants = 0;
 
-              <br>
+          try {
 
-              <span class="muted">
+            const data =
+              await getSharedLeaderboard(
+                q.code
+              );
 
-                ${q.questions.length}
-                questions •
+            participants =
+              data.participants || 0;
 
-                ${escapeHtml(
-                  q.method||
-                  "Quiz"
-                )}
 
-                •
+          } catch (error) {
 
-                ${results.length}
-                student(s)
+            console.error(
+              "Could not load results for",
+              q.code,
+              error
+            );
 
-              </span>
 
-            </div>
+            /* Fallback to local cache */
 
-            <div>
+            participants =
+              (
+                leaderboards[
+                  q.code
+                ] || []
+              ).length;
+          }
 
-              <div class="small-code">
-                ${q.code}
+
+          return `
+
+            <div class="admin-item">
+
+              <div>
+
+                <strong>
+                  ${escapeHtml(
+                    q.title
+                  )}
+                </strong>
+
+                <br>
+
+                <span class="muted">
+
+                  ${q.questions.length}
+                  questions •
+
+                  ${escapeHtml(
+                    q.method ||
+                    "Quiz"
+                  )}
+
+                  •
+
+                  ${participants}
+                  student(s)
+
+                </span>
+
               </div>
 
-              <button
-                class="secondary-btn"
-                onclick="showLeaderboard('${q.code}')">
 
-                🏆 Leaderboard
+              <div>
 
-              </button>
+                <div class="small-code">
+                  ${q.code}
+                </div>
+
+                <button
+                  class="secondary-btn"
+                  onclick="showLeaderboard('${q.code}')">
+
+                  🏆 Leaderboard
+
+                </button>
+
+              </div>
 
             </div>
 
-          </div>
+          `;
+        }
+      )
+    );
 
-        `;
-      }
-    ).join("");
+
+  list.innerHTML =
+    cards.join("");
 }
 
 
-// ======================================================
-// CLEAR LOCAL QUIZZES
-// ======================================================
+/* ======================================================
+   CLEAR LOCAL QUIZZES
+   ====================================================== */
 
-function clearAllQuizzes(){
+function clearAllQuizzes() {
 
-  if(
+  if (
     confirm(
       "Delete all quizzes and leaderboard data stored on this browser?"
     )
-  ){
+  ) {
 
-    quizzes=[];
+    quizzes = [];
 
-    leaderboards={};
+    leaderboards = {};
+
 
     saveQuizzes();
 
     saveLeaderboards();
+
 
     renderAdmin();
   }
 }
 
 
-// ======================================================
-// ESCAPE HTML
-// ======================================================
+/* ======================================================
+   ESCAPE HTML
+   ====================================================== */
 
-function escapeHtml(s){
+function escapeHtml(s) {
 
   return String(s).replace(
     /[&<>"']/g,
-    m=>
-      ({
-        "&":"&amp;",
-        "<":"&lt;",
-        ">":"&gt;",
-        '"':"&quot;",
-        "'":"&#039;"
-      }[m])
+
+    m => ({
+      "&":
+        "&amp;",
+
+      "<":
+        "&lt;",
+
+      ">":
+        "&gt;",
+
+      '"':
+        "&quot;",
+
+      "'":
+        "&#039;"
+
+    }[m])
   );
 }

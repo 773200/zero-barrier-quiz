@@ -124,3 +124,83 @@
   margin-bottom: 25px;
   display: block;
 }
+
+/* MODERN ZERO BARRIER QUIZ DESIGN */
+body{
+  background:
+    radial-gradient(circle at 8% 30%, rgba(96,165,250,.18), transparent 30%),
+    radial-gradient(circle at 92% 70%, rgba(59,130,246,.13), transparent 30%),
+    linear-gradient(135deg,#f8fbff 0%,#eef6ff 48%,#ffffff 100%);
+  color:#10203a;
+  overflow-x:hidden;
+}
+.topbar{
+  height:82px;
+  padding:0 5%;
+  background:rgba(255,255,255,.88);
+  border-bottom:1px solid rgba(148,163,184,.20);
+  box-shadow:0 8px 30px rgba(30,64,175,.06);
+  backdrop-filter:blur(14px);
+}
+.brand{gap:14px;font-size:28px;font-weight:900;letter-spacing:-.7px}
+.brand span{color:#0f2f66}.brand b{color:#1478f2}
+.site-logo{width:64px;height:64px;object-fit:contain;filter:drop-shadow(0 6px 10px rgba(15,23,42,.10))}
+.ghost-btn{
+  background:linear-gradient(135deg,#1677f2,#2563eb);color:#fff;border:0;
+  border-radius:14px;padding:13px 23px;box-shadow:0 10px 24px rgba(37,99,235,.20)
+}
+.container{width:92%;max-width:1200px;padding:34px 0 60px}
+.hero{
+  position:relative;isolation:isolate;min-height:690px;padding:58px 0 50px;
+  display:flex;flex-direction:column;justify-content:center;overflow:hidden;border-radius:34px
+}
+.hero::before{
+  content:"";position:absolute;z-index:-2;width:min(700px,75vw);height:min(700px,75vw);
+  left:50%;top:48%;transform:translate(-50%,-50%);
+  background:url("images/logo.png") center/contain no-repeat;
+  opacity:.055;filter:grayscale(1)
+}
+.hero::after{
+  content:"";position:absolute;z-index:-3;inset:0;
+  background:
+    radial-gradient(circle at 0% 35%,rgba(59,130,246,.17),transparent 25%),
+    radial-gradient(circle at 100% 72%,rgba(96,165,250,.16),transparent 26%),
+    linear-gradient(180deg,rgba(255,255,255,.76),rgba(239,247,255,.42));
+  border-radius:34px
+}
+.badge{
+  background:linear-gradient(135deg,#e5f1ff,#dbeafe);color:#1558ad;
+  border:1px solid rgba(59,130,246,.12);box-shadow:0 8px 20px rgba(59,130,246,.08);
+  padding:9px 16px
+}
+.hero h1{
+  font-size:clamp(38px,6vw,70px);line-height:1.02;letter-spacing:-2.5px;
+  color:#0b1f3a;text-shadow:0 4px 18px rgba(15,23,42,.05)
+}
+.subtitle{font-size:20px;color:#526581;margin-top:16px}
+.role-grid{width:100%;margin-top:46px;gap:24px}
+.role-card{
+  position:relative;overflow:hidden;min-height:230px;padding:32px 28px;text-align:center;
+  border:1px solid rgba(148,163,184,.30);background:rgba(255,255,255,.74);
+  border-radius:22px;box-shadow:0 18px 45px rgba(30,64,175,.09);backdrop-filter:blur(12px)
+}
+.role-card::before{content:"";position:absolute;left:0;right:0;bottom:0;height:5px;background:#1677f2}
+.role-card:nth-child(2)::before{background:#10b981}
+.role-card:nth-child(3)::before{background:#f5b91e}
+.role-card:hover{
+  transform:translateY(-7px);border-color:rgba(59,130,246,.35);
+  box-shadow:0 25px 55px rgba(30,64,175,.15)
+}
+.role-icon{
+  display:flex;width:76px;height:76px;align-items:center;justify-content:center;
+  margin:0 auto 12px;border-radius:50%;background:#e8f3ff;font-size:38px
+}
+.role-card:nth-child(2) .role-icon{background:#dff9ed}
+.role-card:nth-child(3) .role-icon{background:#fff3cf}
+.role-card h2{color:#0e2340;font-size:25px}
+.role-card p{color:#60718a;font-size:16px}
+@media(max-width:750px){
+  .topbar{height:72px}.brand{font-size:20px}.site-logo{width:52px;height:52px}
+  .hero{min-height:auto;padding:45px 0 35px}.hero h1{letter-spacing:-1.5px}
+  .hero::before{width:90vw;height:90vw}.role-card{min-height:auto}
+}

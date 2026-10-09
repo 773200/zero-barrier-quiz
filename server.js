@@ -68,80 +68,108 @@ Important rules:
 5. Do not include explanations outside the JSON.
 `;
 
-    const response = await fetch(
-      "https://api.groq.com/openai/v1/chat/completions",
-      {
-        method: "POST",
+    let quiz = null;
 
-        headers: {
-          "Content-Type": "application/json",
+    // Try up to 3 times to get exactly the requested number
+    for (let attempt = 1; attempt <= 3; attempt++) {
 
-          Authorization:
-            `Bearer ${process.env.GROQ_API_KEY}`
-        },
+      console.log(
+        `Generating quiz: attempt ${attempt}/3 for ${questionCount} questions`
+      );
 
-        body: JSON.stringify({
-          model: MODEL,
+      const response = await fetch(
+        "https://api.groq.com/openai/v1/chat/completions",
+        {
+          method: "POST",
 
-          messages: [
-            {
-              role: "user",
-              content: prompt
+          headers: {
+            "Content-Type": "application/json",
+
+            Authorization:
+              `Bearer ${process.env.GROQ_API_KEY}`
+          },
+
+          body: JSON.stringify({
+            model: MODEL,
+
+            messages: [
+              {
+                role: "user",
+                content: prompt
+              }
+            ],
+
+            temperature: 0.2,
+
+            response_format: {
+              type: "json_object"
             }
-          ],
+          })
+        }
+      );
 
-          temperature: 0.2,
+      const data = await response.json();
 
-          response_format: {
-            type: "json_object"
-          }
-        })
+      if (!response.ok) {
+        console.error("Groq API Error:", data);
+
+        return res.status(response.status).json({
+          error:
+            data?.error?.message ||
+            "Groq API request failed."
+        });
       }
-    );
 
-    const data = await response.json();
+      const content =
+        data?.choices?.[0]?.message?.content;
 
-    if (!response.ok) {
-      console.error("Groq API Error:", data);
+      if (!content) {
+        console.log("Groq returned an empty response.");
+        continue;
+      }
 
-      return res.status(response.status).json({
-        error:
-          data?.error?.message ||
-          "Groq API request failed."
-      });
+      try {
+        quiz = JSON.parse(content);
+      } catch (error) {
+        console.error("JSON Parse Error:", content);
+        quiz = null;
+        continue;
+      }
+
+      if (
+        quiz &&
+        Array.isArray(quiz.questions) &&
+        quiz.questions.length === questionCount
+      ) {
+        console.log(
+          `Success: Exactly ${questionCount} questions generated.`
+        );
+
+        break;
+      }
+
+      console.log(
+        `Attempt ${attempt}: AI returned ${
+          quiz?.questions?.length || 0
+        } questions instead of ${questionCount}. Retrying...`
+      );
+
+      quiz = null;
     }
 
-    const content =
-      data?.choices?.[0]?.message?.content;
-
-    if (!content) {
-      return res.status(500).json({
-        error: "Groq returned an empty response."
-      });
-    }
-
-    let quiz;
-
-    try {
-      quiz = JSON.parse(content);
-    } catch (error) {
-      console.error("JSON Parse Error:", content);
-
-      return res.status(500).json({
-        error:
-          "AI response was not valid JSON."
-      });
-    }
-
+    // If AI still did not return the exact number
     if (
       !quiz ||
-      !Array.isArray(quiz.questions)
+      !Array.isArray(quiz.questions) ||
+      quiz.questions.length !== questionCount
     ) {
       return res.status(500).json({
-        error: "Invalid quiz format returned by AI."
+        error:
+          `AI could not generate exactly ${questionCount} questions. Please try again.`
       });
     }
 
+    // Send the quiz only when the exact number is available
     res.json({
       quiz
     });

@@ -1079,7 +1079,7 @@ app.post("/api/live/:code/start", (req, res) => {
       .toUpperCase();
 
     const hostToken = String(
-      req.body.hostToken || ""
+      req.body.hostToken || req.body.token || ""
     );
 
     const session = getLiveSession(code);

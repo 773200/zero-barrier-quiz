@@ -2193,8 +2193,10 @@ async function startLiveQuiz() {
 
           body: JSON.stringify({
 
-            token:
-              liveHostSession.hostToken
+            
+hostToken:
+  liveHostSession.hostToken
+
 
           })
 
@@ -2216,9 +2218,11 @@ async function startLiveQuiz() {
     }
 
 
-    renderLiveHostState(
-      data
-    );
+    
+renderLiveHostState(
+  data.state || data
+);
+
 
 
   } catch (error) {
@@ -2635,8 +2639,10 @@ async function joinLiveQuiz(
       liveCode:
         liveCode,
 
-      studentToken:
-        data.studentToken,
+      
+studentToken:
+  data.participantToken || data.studentToken,
+
 
       name:
         name
@@ -2815,9 +2821,11 @@ function renderLiveStudentState(
   if (!box) return;
 
 
-  const phase =
-    data.phase ||
-    "waiting";
+  
+const phase = String(
+  data.status || data.phase || "waiting"
+).toLowerCase();
+
 
 
   if (phase === "waiting") {
@@ -2855,7 +2863,9 @@ function renderLiveStudentState(
   }
 
 
-  if (phase === "active") {
+  
+if (phase === "active" || phase === "live") {
+
 
     renderLiveStudentQuestion(
       data
@@ -2894,6 +2904,10 @@ function renderLiveStudentQuestion(
 
 
   if (!box) return;
+  
+window.liveStudentQuestionIndex =
+  Number(data.currentQuestionIndex || 0);
+
 
 
   const question =
@@ -3143,13 +3157,22 @@ async function submitLiveAnswer() {
 
           body: JSON.stringify({
 
-            token:
-              liveStudentSession.studentToken,
+            
+participantToken:
+  liveStudentSession.studentToken,
 
-            answer:
-              Number(
-                selected.value
-              )
+questionIndex:
+  Number(
+    document.getElementById("liveStudentTimer")
+      ? (window.liveStudentQuestionIndex || 0)
+      : 0
+  ),
+
+answer:
+  Number(
+    selected.value
+  )
+
 
           })
 

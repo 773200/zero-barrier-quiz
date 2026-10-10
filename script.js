@@ -1848,8 +1848,11 @@ function renderLiveHostState(data) {
     data.participants || [];
 
 
-  const phase =
-    data.phase || "waiting";
+  data = data && data.state ? data.state : data;
+
+const phase = String(
+  data.phase || data.status || "waiting"
+).toLowerCase();
 
 
   if (phase === "waiting") {
@@ -1944,7 +1947,7 @@ function renderLiveHostState(data) {
   }
 
 
-  if (phase === "active") {
+  if (phase === "active" || phase === "live") {
 
     if (startButton) {
 

@@ -1,3707 +1,1037 @@
-let quizzes =
-  JSON.parse(
-    localStorage.getItem("zbq_quizzes") || "[]"
-  );
-
-let currentQuiz = null;
-
-let currentStudent = "";
-
-let createMode = "ai";
-
-let leaderboards =
-  JSON.parse(
-    localStorage.getItem(
-      "zbq_leaderboards"
-    ) || "{}"
-  );
-
-
-/* ======================================================
-   LOCAL STORAGE
-   ====================================================== */
-
-function saveLeaderboards() {
-  localStorage.setItem(
-    "zbq_leaderboards",
-    JSON.stringify(leaderboards)
-  );
-}
-
-
-function saveQuizzes() {
-  localStorage.setItem(
-    "zbq_quizzes",
-    JSON.stringify(quizzes)
-  );
-}
-
-
-/* ======================================================
-   VIEW MANAGEMENT
-   ====================================================== */
-
-function showView(id) {
-
-  document
-    .querySelectorAll(".view")
-    .forEach(v =>
-      v.classList.remove("active")
-    );
-
-  document
-    .getElementById(id)
-    .classList.add("active");
-
-  window.scrollTo({
-    top: 0,
-    behavior: "smooth"
-  });
-}
-
-
-function showHome() {
-  showView("homeView");
-}
-
-
-function openTeacher() {
-
-  showView("teacherView");
-
-  selectCreateMode("ai");
-}
-
-
-function openStudent() {
-
-  showView("studentView");
-}
-
-
-function openAdmin() {
-
-  showView("adminView");
-
-  renderAdmin();
-}
-
-
-/* ======================================================
-   CREATE MODE
-   ====================================================== */
-
-function selectCreateMode(mode) {
-
-  createMode = mode;
-
-  document
-    .getElementById("aiModeCard")
-    .classList.toggle(
-      "selected",
-      mode === "ai"
-    );
-
-  document
-    .getElementById("manualModeCard")
-    .classList.toggle(
-      "selected",
-      mode === "manual"
-    );
-
-  document
-    .getElementById("aiCreator")
-    .classList.toggle(
-      "hidden",
-      mode !== "ai"
-    );
-
-  document
-    .getElementById("manualCreator")
-    .classList.toggle(
-      "hidden",
-      mode !== "manual"
-    );
-
-  if (
-    mode === "manual" &&
-    !document.querySelector(
-      ".question-editor"
-    )
-  ) {
-
-    addManualQuestion();
-  }
-}
-
-
-/* ======================================================
-   AI QUIZ GENERATION
-   ====================================================== */
-
-async function generateAIQuiz() {
-
-  const topic =
-    document
-      .getElementById("aiTopic")
-      .value
-      .trim();
-
-  const count =
-    Number(
-      document
-        .getElementById("aiCount")
-        .value
-    );
-
-  const difficulty =
-    document
-      .getElementById("aiDifficulty")
-      .value;
-
-  const type =
-    document
-      .getElementById("aiType")
-      .value;
-
-  const status =
-    document
-      .getElementById("aiStatus");
-
-
-  if (!topic) {
-
-    status.innerHTML =
-      '<div class="status error">' +
-      'Please enter a topic.' +
-      '</div>';
-
-    return;
-  }
-
-
-  if (
-    count < 1 ||
-    count > 30
-  ) {
-
-    status.innerHTML =
-      '<div class="status error">' +
-      'Choose between 1 and 30 questions.' +
-      '</div>';
-
-    return;
-  }
-
-
-  status.innerHTML =
-    '<div class="status">' +
-    '🤖 AI is creating your quiz. Please wait...' +
-    '</div>';
-
-
-  try {
-
-    const res =
-      await fetch(
-        "/api/generate-quiz",
-        {
-          method: "POST",
-
-          headers: {
-            "Content-Type":
-              "application/json"
-          },
-
-          body: JSON.stringify({
-            topic,
-            count,
-            difficulty,
-            type
-          })
-        }
-      );
-
-
-    const data =
-      await res.json();
-
-
-    if (!res.ok) {
-
-      throw new Error(
-        data.error ||
-        "AI generation failed"
-      );
-    }
-
-
-    const quiz =
-      normalizeQuiz(
-        data.quiz || data
-      );
-
-
-    await createQuiz(
-      quiz,
-      "AI Generated"
-    );
-
-
-    status.innerHTML =
-      '<div class="status success">' +
-      'Quiz generated successfully.' +
-      '</div>';
-
-
-  } catch (err) {
-
-    status.innerHTML =
-      '<div class="status error">' +
-      '❌ ' +
-      escapeHtml(
-        err.message
-      ) +
-      '<br><small>Please try again.</small>' +
-      '</div>';
-  }
-}
-
-
-/* ======================================================
-   NORMALIZE QUIZ
-   ====================================================== */
-
-function normalizeQuiz(q) {
-
-  const questions =
-    (q.questions || [])
-      .map(x => ({
-
-        question:
-          String(
-            x.question ||
-            "Question"
-          ),
-
-        options:
-          Array.isArray(
-            x.options
-          )
-            ? x.options.map(
-                String
-              )
-            : [
-                "True",
-                "False"
-              ],
-
-        answer:
-          Number.isInteger(
-            x.answer
-          )
-            ? x.answer
-            : 0
-      }));
-
-
-  return {
-
-    title:
-      String(
-        q.title ||
-        "AI Quiz"
-      ),
-
-    questions
-  };
-}
-
-
-/* ======================================================
-   CREATE QUIZ CODE
-   ====================================================== */
-
-function makeCode() {
-
-  let code;
-
-  do {
-
-    code =
-      "ZBQ" +
-      Math.floor(
-        1000 +
-        Math.random() * 9000
-      );
-
-  } while (
-    quizzes.some(
-      q =>
-        q.code === code
-    )
-  );
-
-  return code;
-}
-
-
-/* ======================================================
-   CREATE + SAVE QUIZ
-   ====================================================== */
-
-async function createQuiz(
-  quiz,
-  method
-) {
-
-  quiz.code =
-    makeCode();
-
-  quiz.method =
-    method;
-
-  quiz.createdAt =
-    new Date().toISOString();
-
-
-  /* Save locally */
-  quizzes.push(quiz);
-
-  saveQuizzes();
-
-
-  /* Upload to server */
-
-  try {
-
-    const response =
-      await fetch(
-        "/api/quizzes",
-        {
-          method: "POST",
-
-          headers: {
-            "Content-Type":
-              "application/json"
-          },
-
-          body:
-            JSON.stringify(quiz)
-        }
-      );
-
-
-    const data =
-      await response.json();
-
-
-    if (!response.ok) {
-
-      console.error(
-        "Server quiz save failed:",
-        data
-      );
-
-      throw new Error(
-        data.error ||
-        "Quiz could not be shared."
-      );
-    }
-
-
-    console.log(
-      "Quiz successfully stored on server:",
-      quiz.code
-    );
-
-
-  } catch (error) {
-
-    console.error(
-      "Shared quiz error:",
-      error
-    );
-
-
-    alert(
-      "Quiz was created, but it could not be uploaded to the server. Students on other devices may not be able to join."
-    );
-  }
-
-
-  showCreatedQuiz(quiz);
-}
-
-
-/* ======================================================
-   SHOW CREATED QUIZ
-   ====================================================== */
-
-function showCreatedQuiz(quiz) {
-
-  const panel =
-    document.getElementById(
-      "createdQuizPanel"
-    );
-
-
-  panel.classList.remove(
-    "hidden"
-  );
-
-
-  panel.innerHTML =
-
-    '<h2>🎉 Quiz Created Successfully!</h2>' +
-
-    '<div class="code-box">' +
-
-      '<div>Your Quiz Code</div>' +
-
-      '<div class="join-code">' +
-        quiz.code +
-      '</div>' +
-
-      '<div>' +
-        'Share this code with your students.' +
-      '</div>' +
-
-    '</div>' +
-
-    '<h3>' +
-      escapeHtml(
-        quiz.title
-      ) +
-    '</h3>' +
-
-    '<p>' +
-      quiz.questions.length +
-      ' questions • ' +
-      escapeHtml(
-        quiz.method
-      ) +
-    '</p>' +
-
-    '<button class="secondary-btn" onclick="openStudent()">' +
-      'Go to Student Join' +
-    '</button>' +
-
-    '<button class="secondary-btn" onclick="showLeaderboard(\'' +
-      quiz.code +
-    '\')">' +
-      '🏆 View Leaderboard' +
-    '</button>';
-
-
-  panel.scrollIntoView({
-    behavior: "smooth"
-  });
-}
-
-
-/* ======================================================
-   MANUAL QUESTION
-   ====================================================== */
-
-function addManualQuestion() {
-
-  const box =
-    document.getElementById(
-      "manualQuestions"
-    );
-
-
-  const n =
-    box.querySelectorAll(
-      ".question-editor"
-    ).length + 1;
-
-
-  const el =
-    document.createElement(
-      "div"
-    );
-
-
-  el.className =
-    "question-editor";
-
-
-  el.innerHTML =
-
-    '<h3>Question ' +
-      n +
-    '</h3>' +
-
-    '<input class="mq-text" placeholder="Enter your question">' +
-
-    '<div class="option-row">' +
-      '<input class="mq-option" placeholder="Option A">' +
-      '<input type="radio" name="correct' +
-        n +
-      '" value="0" checked> Correct' +
-    '</div>' +
-
-    '<div class="option-row">' +
-      '<input class="mq-option" placeholder="Option B">' +
-      '<input type="radio" name="correct' +
-        n +
-      '" value="1"> Correct' +
-    '</div>' +
-
-    '<div class="option-row">' +
-      '<input class="mq-option" placeholder="Option C">' +
-      '<input type="radio" name="correct' +
-        n +
-      '" value="2"> Correct' +
-    '</div>' +
-
-    '<div class="option-row">' +
-      '<input class="mq-option" placeholder="Option D">' +
-      '<input type="radio" name="correct' +
-        n +
-      '" value="3"> Correct' +
-    '</div>';
-
-
-  box.appendChild(el);
-}
-
-
-/* ======================================================
-   SAVE MANUAL QUIZ
-   ====================================================== */
-
-async function saveManualQuiz() {
-
-  const title =
-    document
-      .getElementById(
-        "manualTitle"
-      )
-      .value
-      .trim() ||
-    "My Quiz";
-
-
-  const editors = [
-    ...document.querySelectorAll(
-      ".question-editor"
-    )
-  ];
-
-
-  const questions = [];
-
-
-  for (
-    const e of editors
-  ) {
-
-    const text =
-      e.querySelector(
-        ".mq-text"
-      ).value.trim();
-
-
-    const opts = [
-      ...e.querySelectorAll(
-        ".mq-option"
-      )
-    ].map(
-      x =>
-        x.value.trim()
-    );
-
-
-    const correct =
-      Number(
-        e.querySelector(
-          "input[type=radio]:checked"
-        ).value
-      );
-
-
-    if (
-      !text ||
-      opts.some(
-        x => !x
-      )
-    ) {
-
-      document
-        .getElementById(
-          "manualStatus"
-        )
-        .innerHTML =
-          '<div class="status error">' +
-          'Please complete every question and option.' +
-          '</div>';
-
-      return;
-    }
-
-
-    questions.push({
-
-      question:
-        text,
-
-      options:
-        opts,
-
-      answer:
-        correct
-    });
-  }
-
-
-  if (
-    !questions.length
-  ) {
-    return;
-  }
-
-
-  await createQuiz(
-
-    {
-      title,
-      questions
-    },
-
-    "Teacher Created"
-  );
-
-
-  document
-    .getElementById(
-      "manualStatus"
-    )
-    .innerHTML =
-      '<div class="status success">' +
-      'Your quiz has been saved.' +
-      '</div>';
-}
-
-
-/* ======================================================
-   STUDENT JOIN
-   ====================================================== */
-
-async function joinQuiz() {
-
-  const name =
-    document
-      .getElementById(
-        "studentName"
-      )
-      .value
-      .trim();
-
-
-  const code =
-    document
-      .getElementById(
-        "studentCode"
-      )
-      .value
-      .trim()
-      .toUpperCase();
-
-
-  const msg =
-    document.getElementById(
-      "studentMessage"
-    );
-
-
-  if (
-    !name ||
-    !code
-  ) {
-
-    msg.innerHTML =
-      '<div class="status error">' +
-      'Please enter your name and quiz code.' +
-      '</div>';
-
-    return;
-  }
-
-
-  msg.innerHTML =
-    '<div class="status">' +
-    '🔍 Finding your quiz...' +
-    '</div>';
-
-
-  try {
-
-    const response =
-      await fetch(
-        "/api/quizzes/" +
-        encodeURIComponent(
-          code
-        )
-      );
-
-
-    const data =
-      await response.json();
-
-
-    if (!response.ok) {
-
-      throw new Error(
-        data.error ||
-        "Quiz not found."
-      );
-    }
-
-
-    const quiz =
-      data.quiz;
-
-
-    if (
-      !quiz ||
-      !Array.isArray(
-        quiz.questions
-      )
-    ) {
-
-      throw new Error(
-        "Invalid quiz data received."
-      );
-    }
-
-
-    currentQuiz =
-      quiz;
-
-    currentStudent =
-      name;
-
-
-    renderQuiz();
-
-
-  } catch (error) {
-
-    console.error(
-      "Join Quiz Error:",
-      error
-    );
-
-
-    msg.innerHTML =
-      '<div class="status error">' +
-      '❌ ' +
-      escapeHtml(
-        error.message ||
-        "Quiz not found."
-      ) +
-      '</div>';
-  }
-}
-
-
-/* ======================================================
-   RENDER QUIZ
-   ====================================================== */
-
-function renderQuiz() {
-
-  showView(
-    "quizView"
-  );
-
-
-  document
-    .getElementById(
-      "quizTitle"
-    )
-    .textContent =
-      currentQuiz.title;
-
-
-  document
-    .getElementById(
-      "quizStudent"
-    )
-    .textContent =
-      "Student: " +
-      currentStudent +
-      " • Code: " +
-      currentQuiz.code;
-
-
-  document
-    .getElementById(
-      "quizResult"
-    )
-    .innerHTML =
-      "";
-
-
-  document
-    .getElementById(
-      "quizQuestions"
-    )
-    .innerHTML =
-
-      currentQuiz.questions
-        .map(
-          (q, i) =>
-
-            '<div class="question-card">' +
-
-              '<h3>' +
-                (i + 1) +
-                ". " +
-                escapeHtml(
-                  q.question
-                ) +
-              '</h3>' +
-
-              q.options
-                .map(
-                  (o, j) =>
-
-                    '<label class="quiz-option">' +
-
-                      '<input type="radio" name="q' +
-                        i +
-                      '" value="' +
-                        j +
-                      '">' +
-
-                      escapeHtml(o) +
-
-                    '</label>'
-                )
-                .join("") +
-
-            '</div>'
-        )
-        .join("");
-}
-
-
-/* ======================================================
-   SUBMIT QUIZ
-   ====================================================== */
-
-async function submitQuiz() {
-
-  if (!currentQuiz) {
-
-    alert(
-      "No quiz is currently open."
-    );
-
-    return;
-  }
-
-
-  let score = 0;
-
-  let answered = 0;
-
-
-  currentQuiz.questions.forEach(
-    (q, i) => {
-
-      const chosen =
-        document.querySelector(
-          'input[name="q' +
-          i +
-          '"]:checked'
-        );
-
-
-      if (chosen) {
-
-        answered++;
-
-
-        if (
-          Number(
-            chosen.value
-          ) ===
-          q.answer
-        ) {
-
-          score++;
-        }
-      }
-    }
-  );
-
-
-  const total =
-    currentQuiz.questions.length;
-
-
-  const pct =
-    total > 0
-      ? Math.round(
-          (score / total) *
-          100
-        )
-      : 0;
-
-
-  const resultBox =
-    document.getElementById(
-      "quizResult"
-    );
-
-
-  resultBox.innerHTML =
-    '<div class="status">' +
-    '⏳ Saving your result...' +
-    '</div>';
-
-
-  try {
-
-    /* Send result to shared server */
-
-    const response =
-      await fetch(
-        "/api/quizzes/" +
-        encodeURIComponent(
-          currentQuiz.code
-        ) +
-        "/results",
-        {
-          method: "POST",
-
-          headers: {
-            "Content-Type":
-              "application/json"
-          },
-
-          body:
-            JSON.stringify({
-
-              name:
-                currentStudent,
-
-              score:
-                score,
-
-              total:
-                total,
-
-              percentage:
-                pct
-            })
-        }
-      );
-
-
-    const data =
-      await response.json();
-
-
-    if (!response.ok) {
-
-      throw new Error(
-        data.error ||
-        "Could not save result."
-      );
-    }
-
-
-    /* Save server leaderboard locally
-       only as a cache */
-
-    leaderboards[
-      currentQuiz.code
-    ] =
-      data.leaderboard || [];
-
-    saveLeaderboards();
-
-
-    const rank =
-      data.result?.rank ||
-      0;
-
-
-    resultBox.innerHTML =
-
-      '<div class="result-box">' +
-
-        '<h2>🎉 Quiz Completed</h2>' +
-
-        '<p><strong>' +
-          escapeHtml(
-            currentStudent
-          ) +
-        '</strong>, your score is ' +
-
-        '<strong>' +
-          score +
-          '/' +
-          total +
-        '</strong> (' +
-          pct +
-        '%).</p>' +
-
-        '<p>You answered ' +
-          answered +
-          ' of ' +
-          total +
-          ' questions.</p>' +
-
-        '<div class="student-rank">' +
-          '🏆 Your Rank: <strong>#' +
-          rank +
-          '</strong>' +
-        '</div>' +
-
-        '<button class="secondary-btn leaderboard-btn" onclick="showLeaderboard(\'' +
-          currentQuiz.code +
-        '\')">' +
-          '🏆 View Leaderboard' +
-        '</button>' +
-
-      '</div>';
-
-
-    /* Disable questions */
-
-    document
-      .querySelectorAll(
-        "#quizQuestions input"
-      )
-      .forEach(
-        input => {
-          input.disabled = true;
-        }
-      );
-
-
-    window.scrollTo({
-
-      top:
-        document.body
-          .scrollHeight,
-
-      behavior:
-        "smooth"
-    });
-
-
-  } catch (error) {
-
-    console.error(
-      "Submit result error:",
-      error
-    );
-
-
-    resultBox.innerHTML =
-      '<div class="status error">' +
-      '❌ ' +
-      escapeHtml(
-        error.message ||
-        "Could not save your result."
-      ) +
-      '<br>' +
-      '<small>Please try submitting again.</small>' +
-      '</div>';
-  }
-}
-
-
-/* ======================================================
-   GET SHARED LEADERBOARD
-   ====================================================== */
-
-async function getSharedLeaderboard(
-  code
-) {
-
-  const response =
-    await fetch(
-      "/api/quizzes/" +
-      encodeURIComponent(
-        code
-      ) +
-      "/results"
-    );
-
-
-  const data =
-    await response.json();
-
-
-  if (!response.ok) {
-
-    throw new Error(
-      data.error ||
-      "Could not load leaderboard."
-    );
-  }
-
-
-  return data;
-}
-
-
-/* ======================================================
-   SHOW LEADERBOARD
-   ====================================================== */
-
-async function showLeaderboard(
-  code
-) {
-
-  try {
-
-    const data =
-      await getSharedLeaderboard(
-        code
-      );
-
-
-    const leaderboard =
-      data.leaderboard || [];
-
-
-    /* Remove old modal */
-
-    const old =
-      document.getElementById(
-        "sharedLeaderboardModal"
-      );
-
-    if (old) {
-      old.remove();
-    }
-
-
-    const modal =
-      document.createElement(
-        "div"
-      );
-
-
-    modal.id =
-      "sharedLeaderboardModal";
-
-
-    modal.style.position =
-      "fixed";
-
-    modal.style.inset =
-      "0";
-
-    modal.style.background =
-      "rgba(0,0,0,0.65)";
-
-    modal.style.zIndex =
-      "99999";
-
-    modal.style.display =
-      "flex";
-
-    modal.style.alignItems =
-      "center";
-
-    modal.style.justifyContent =
-      "center";
-
-    modal.style.padding =
-      "20px";
-
-
-    const box =
-      document.createElement(
-        "div"
-      );
-
-
-    box.style.background =
-      "#ffffff";
-
-    box.style.width =
-      "min(700px, 95vw)";
-
-    box.style.maxHeight =
-      "85vh";
-
-    box.style.overflowY =
-      "auto";
-
-    box.style.borderRadius =
-      "18px";
-
-    box.style.padding =
-      "25px";
-
-    box.style.boxShadow =
-      "0 20px 60px rgba(0,0,0,0.3)";
-
-
-    let rows = "";
-
-
-    if (
-      leaderboard.length === 0
-    ) {
-
-      rows =
-        '<tr>' +
-          '<td colspan="4" style="text-align:center;padding:20px;">' +
-            'No students have submitted yet.' +
-          '</td>' +
-        '</tr>';
-
-    } else {
-
-      rows =
-        leaderboard
-          .map(
-            item =>
-
-              '<tr>' +
-
-                '<td style="padding:10px;text-align:center;">' +
-                  '#' +
-                  item.rank +
-                '</td>' +
-
-                '<td style="padding:10px;">' +
-                  escapeHtml(
-                    item.name
-                  ) +
-                '</td>' +
-
-                '<td style="padding:10px;text-align:center;">' +
-                  item.score +
-                  '/' +
-                  item.total +
-                '</td>' +
-
-                '<td style="padding:10px;text-align:center;">' +
-                  item.percentage +
-                  '%' +
-                '</td>' +
-
-              '</tr>'
-          )
-          .join("");
-    }
-
-
-    box.innerHTML =
-
-      '<div style="display:flex;justify-content:space-between;align-items:center;gap:15px;">' +
-
-        '<div>' +
-
-          '<h2 style="margin:0;">🏆 Leaderboard</h2>' +
-
-          '<p style="margin:5px 0;color:#666;">' +
-            'Quiz Code: ' +
-            escapeHtml(code) +
-          '</p>' +
-
-        '</div>' +
-
-        '<button id="closeLeaderboard" class="secondary-btn">' +
-          '✕ Close' +
-        '</button>' +
-
-      '</div>' +
-
-      '<p style="font-weight:600;">' +
-        '👥 Participants: ' +
-        data.participants +
-      '</p>' +
-
-      '<div style="overflow-x:auto;">' +
-
-        '<table style="width:100%;border-collapse:collapse;">' +
-
-          '<thead>' +
-
-            '<tr style="background:#f2f6ff;">' +
-
-              '<th style="padding:10px;">Rank</th>' +
-
-              '<th style="padding:10px;text-align:left;">Student</th>' +
-
-              '<th style="padding:10px;">Score</th>' +
-
-              '<th style="padding:10px;">Percentage</th>' +
-
-            '</tr>' +
-
-          '</thead>' +
-
-          '<tbody>' +
-            rows +
-          '</tbody>' +
-
-        '</table>' +
-
-      '</div>';
-
-
-    modal.appendChild(
-      box
-    );
-
-
-    document.body.appendChild(
-      modal
-    );
-
-
-    document
-      .getElementById(
-        "closeLeaderboard"
-      )
-      .onclick =
-        () => modal.remove();
-
-
-    modal.onclick =
-      event => {
-
-        if (
-          event.target ===
-          modal
-        ) {
-
-          modal.remove();
-        }
-      };
-
-
-  } catch (error) {
-
-    console.error(
-      "Leaderboard error:",
-      error
-    );
-
-
-    alert(
-      "❌ " +
-      (
-        error.message ||
-        "Could not load leaderboard."
-      )
-    );
-  }
-}
-
-
-/* ======================================================
-   ADMIN
-   ====================================================== */
-
-async function renderAdmin() {
-
-  const list =
-    document.getElementById(
-      "adminList"
-    );
-
-
-  if (!quizzes.length) {
-
-    list.innerHTML =
-      "<p class='muted'>" +
-      "No quizzes created on this browser yet." +
-      "</p>";
-
-    return;
-  }
-
-
-  list.innerHTML =
-    "<p class='muted'>⏳ Loading shared quiz results...</p>";
-
-
-  const cards =
-    await Promise.all(
-
-      quizzes.map(
-        async q => {
-
-          let participants = 0;
-
-          try {
-
-            const data =
-              await getSharedLeaderboard(
-                q.code
-              );
-
-            participants =
-              data.participants || 0;
-
-
-          } catch (error) {
-
-            console.error(
-              "Could not load results for",
-              q.code,
-              error
-            );
-
-
-            /* Fallback to local cache */
-
-            participants =
-              (
-                leaderboards[
-                  q.code
-                ] || []
-              ).length;
-          }
-
-
-          return `
-
-            <div class="admin-item">
-
-              <div>
-
-                <strong>
-                  ${escapeHtml(
-                    q.title
-                  )}
-                </strong>
-
-                <br>
-
-                <span class="muted">
-
-                  ${q.questions.length}
-                  questions •
-
-                  ${escapeHtml(
-                    q.method ||
-                    "Quiz"
-                  )}
-
-                  •
-
-                  ${participants}
-                  student(s)
-
-                </span>
-
-              </div>
-
-
-              <div>
-
-                <div class="small-code">
-                  ${q.code}
-                </div>
-
-                <button
-                  class="secondary-btn"
-                  onclick="showLeaderboard('${q.code}')">
-
-                  🏆 Leaderboard
-
-                </button>
-
-              </div>
-
-            </div>
-
-          `;
-        }
-      )
-    );
-
-
-  list.innerHTML =
-    cards.join("");
-}
-
-
-/* ======================================================
-   CLEAR LOCAL QUIZZES
-   ====================================================== */
-
-function clearAllQuizzes() {
-
-  if (
-    confirm(
-      "Delete all quizzes and leaderboard data stored on this browser?"
-    )
-  ) {
-
-    quizzes = [];
-
-    leaderboards = {};
-
-
-    saveQuizzes();
-
-    saveLeaderboards();
-
-
-    renderAdmin();
-  }
-}
-
-
-/* ======================================================
-   ESCAPE HTML
-   ====================================================== */
-
-function escapeHtml(s) {
-
-  return String(s).replace(
-    /[&<>"']/g,
-
-    m => ({
-      "&":
-        "&amp;",
-
-      "<":
-        "&lt;",
-
-      ">":
-        "&gt;",
-
-      '"':
-        "&quot;",
-
-      "'":
-        "&#039;"
-
-    }[m])
-  );
-}
 /* =========================================================
-   🔴 ZERO BARRIER QUIZ - LIVE QUIZ SYSTEM
-   Paste this entire section at the VERY END of script.js
+   ZERO BARRIER QUIZ — VERSION 3
+   Multi-Institution Quiz Platform
    ========================================================= */
 
+let currentUser = null;
+let currentQuiz = null;
+let currentStudent = "";
+let createMode = "ai";
 let liveHostSession = null;
 let liveStudentSession = null;
 
 let liveHostTimer = null;
 let liveStudentTimer = null;
 
+let manualQuestions = [];
+let leaderboards = {};
+
 
 /* =========================================================
-   LIVE QUIZ - HOST
+   API HELPER
    ========================================================= */
 
-async function createLiveQuiz(quizCode) {
+async function api(url, options = {}) {
+  const response = await fetch(url, {
+    credentials: "same-origin",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {})
+    }
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(data.error || "Request failed.");
+  }
+
+  return data;
+}
+
+
+/* =========================================================
+   UTILITIES
+   ========================================================= */
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, char => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;"
+  }[char]));
+}
+
+function showStatus(elementId, message, type = "info") {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+
+  el.innerHTML = `
+    <div class="status ${type}">
+      ${escapeHtml(message)}
+    </div>
+  `;
+}
+
+function showView(id) {
+  document.querySelectorAll(".view").forEach(view => {
+    view.classList.remove("active");
+  });
+
+  const view = document.getElementById(id);
+  if (view) view.classList.add("active");
+
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function showHome() {
+  showView("homeView");
+}
+
+function returnToDashboard() {
+  if (currentUser?.role === "super_admin") {
+    openSuperAdminDashboard();
+  } else if (currentUser?.role === "institution") {
+    openInstitutionDashboard();
+  } else {
+    showHome();
+  }
+}
+
+
+/* =========================================================
+   AUTHENTICATION
+   ========================================================= */
+
+function openSuperAdminLogin() {
+  showView("superAdminLoginView");
+}
+
+function openInstitutionLogin() {
+  showView("institutionLoginView");
+}
+
+async function loginSuperAdmin() {
+  const username = document.getElementById("superAdminUsername")?.value.trim();
+  const password = document.getElementById("superAdminPassword")?.value;
+
+  if (!username || !password) {
+    showStatus("superAdminMessage", "Enter username and password.", "error");
+    return;
+  }
 
   try {
-
-    const response = await fetch("/api/live", {
+    const data = await api("/api/auth/super-admin/login", {
       method: "POST",
+      body: JSON.stringify({ username, password })
+    });
 
-      headers: {
-        "Content-Type": "application/json"
-      },
+    currentUser = data.user;
+    openSuperAdminDashboard();
+  } catch (error) {
+    showStatus("superAdminMessage", error.message, "error");
+  }
+}
 
+async function loginInstitution() {
+  const username = document.getElementById("institutionUsername")?.value.trim();
+  const password = document.getElementById("institutionPassword")?.value;
+
+  if (!username || !password) {
+    showStatus("institutionMessage", "Enter username and password.", "error");
+    return;
+  }
+
+  try {
+    const data = await api("/api/auth/institution/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password })
+    });
+
+    currentUser = data.user;
+    openInstitutionDashboard();
+  } catch (error) {
+    showStatus("institutionMessage", error.message, "error");
+  }
+}
+
+async function checkSession() {
+  try {
+    const data = await api("/api/auth/me");
+    currentUser = data.user;
+
+    if (currentUser?.role === "super_admin") {
+      openSuperAdminDashboard();
+    } else if (currentUser?.role === "institution") {
+      openInstitutionDashboard();
+    } else {
+      showHome();
+    }
+  } catch {
+    currentUser = null;
+    showHome();
+  }
+}
+
+async function superAdminLogout() {
+  await logout();
+}
+
+async function institutionLogout() {
+  await logout();
+}
+
+async function logout() {
+  try {
+    await api("/api/auth/logout", { method: "POST" });
+  } catch {}
+
+  currentUser = null;
+  showHome();
+}
+
+
+/* =========================================================
+   SUPER ADMIN
+   ========================================================= */
+
+function openSuperAdminDashboard() {
+  showView("superAdminView");
+  loadInstitutions();
+}
+
+async function loadInstitutions() {
+  const list = document.getElementById("institutionList");
+  if (!list) return;
+
+  list.innerHTML = `<p>Loading institutions...</p>`;
+
+  try {
+    const data = await api("/api/super-admin/institutions");
+
+    const institutions = data.institutions || [];
+
+    list.innerHTML = institutions.length
+      ? institutions.map(institution => `
+          <div class="admin-item">
+            <div>
+              <strong>${escapeHtml(institution.name)}</strong>
+              <p>
+                Username: ${escapeHtml(institution.username)}<br>
+                Plan: ${escapeHtml(institution.plan)}<br>
+                Quizzes: ${institution.usedQuizzes}/${institution.quizLimit}
+              </p>
+            </div>
+          </div>
+        `).join("")
+      : `<p>No institutions added yet.</p>`;
+
+  } catch (error) {
+    list.innerHTML = `<p class="status error">${escapeHtml(error.message)}</p>`;
+  }
+}
+
+function showAddInstitutionForm() {
+  document.getElementById("addInstitutionForm")?.classList.remove("hidden");
+}
+
+function hideAddInstitutionForm() {
+  document.getElementById("addInstitutionForm")?.classList.add("hidden");
+}
+
+async function createInstitution() {
+  const name = document.getElementById("newInstitutionName")?.value.trim();
+  const username = document.getElementById("newInstitutionUsername")?.value.trim();
+  const password = document.getElementById("newInstitutionPassword")?.value;
+  const quizLimit = Number(document.getElementById("newInstitutionLimit")?.value);
+  const plan = document.getElementById("newInstitutionPlan")?.value;
+  const expiry = document.getElementById("newInstitutionExpiry")?.value;
+
+  if (!name || !username || !password) {
+    showStatus("institutionCreateMessage", "Complete all required fields.", "error");
+    return;
+  }
+
+  try {
+    await api("/api/super-admin/institutions", {
+      method: "POST",
       body: JSON.stringify({
-        quizCode: quizCode
+        name,
+        username,
+        password,
+        quizLimit,
+        plan,
+        expiry
       })
     });
 
+    showStatus("institutionCreateMessage", "Institution created successfully!", "success");
+    hideAddInstitutionForm();
+    await loadInstitutions();
 
-    const data = await response.json();
+  } catch (error) {
+    showStatus("institutionCreateMessage", error.message, "error");
+  }
+}
 
 
-    if (!response.ok) {
+/* =========================================================
+   INSTITUTION DASHBOARD
+   ========================================================= */
 
-      throw new Error(
-        data.error || "Could not create Live Quiz."
-      );
+async function openInstitutionDashboard() {
+  showView("institutionView");
+  loadInstitutionDashboard();
+}
 
+async function loadInstitutionDashboard() {
+  try {
+    const data = await api("/api/institution/dashboard");
+
+    const nameEl = document.getElementById("institutionDashboardName");
+    if (nameEl) nameEl.textContent = data.institution?.name || "Institution";
+
+    const usageEl = document.getElementById("institutionQuizUsage");
+    if (usageEl) {
+      usageEl.textContent =
+        `${data.usedQuizzes ?? 0} / ${data.quizLimit ?? 0} quizzes used`;
     }
 
+    const logo = document.getElementById("institutionLogo");
+    if (logo && data.institution?.logoUrl) {
+      logo.src = data.institution.logoUrl;
+      logo.classList.remove("hidden");
+    }
+  } catch (error) {
+    console.error("Institution dashboard:", error);
+  }
+}
 
-    liveHostSession = {
 
-      liveCode: data.liveCode,
+/* =========================================================
+   TEACHER / QUIZ CREATION
+   ========================================================= */
 
-      hostToken: data.hostToken,
+function openTeacher() {
+  showView("teacherView");
+  selectCreateMode("ai");
+}
 
-      quizCode: quizCode
+function selectCreateMode(mode) {
+  createMode = mode;
 
+  document.getElementById("aiModeCard")?.classList.toggle("selected", mode === "ai");
+  document.getElementById("manualModeCard")?.classList.toggle("selected", mode === "manual");
+
+  document.getElementById("aiCreator")?.classList.toggle("hidden", mode !== "ai");
+  document.getElementById("manualCreator")?.classList.toggle("hidden", mode !== "manual");
+
+  if (mode === "manual" && !document.querySelector(".question-editor")) {
+    addManualQuestion();
+  }
+}
+
+
+/* =========================================================
+   NORMALIZE QUIZ
+   ========================================================= */
+
+function normalizeQuiz(quiz) {
+  return {
+    title: String(quiz.title || "Untitled Quiz"),
+    questions: (quiz.questions || []).map(question => ({
+      question: String(question.question || ""),
+      options: Array.isArray(question.options)
+        ? question.options.map(String)
+        : [],
+      answer: Number(question.answer ?? 0)
+    }))
+  };
+}
+
+
+/* =========================================================
+   AI QUIZ GENERATION
+   ========================================================= */
+
+async function generateAIQuiz() {
+  const topic = document.getElementById("aiTopic")?.value.trim();
+  const count = Number(document.getElementById("aiCount")?.value);
+  const difficulty = document.getElementById("aiDifficulty")?.value;
+  const type = document.getElementById("aiType")?.value;
+
+  if (!topic) {
+    showStatus("aiStatus", "Enter a quiz topic.", "error");
+    return;
+  }
+
+  if (!Number.isInteger(count) || count < 1) {
+    showStatus("aiStatus", "Enter a valid number of questions.", "error");
+    return;
+  }
+
+  showStatus("aiStatus", "AI is generating your quiz...", "info");
+
+  try {
+    const data = await api("/api/generate-quiz", {
+      method: "POST",
+      body: JSON.stringify({ topic, count, difficulty, type })
+    });
+
+    const quiz = normalizeQuiz(data.quiz || data);
+
+    await createQuiz(quiz, "AI Generated");
+
+    showStatus("aiStatus", "Quiz created successfully!", "success");
+
+  } catch (error) {
+    showStatus("aiStatus", error.message, "error");
+  }
+}
+
+
+/* =========================================================
+   MANUAL QUIZ
+   ========================================================= */
+
+function addManualQuestion() {
+  const box = document.getElementById("manualQuestions");
+  if (!box) return;
+
+  const n = box.querySelectorAll(".question-editor").length + 1;
+
+  const el = document.createElement("div");
+  el.className = "question-editor";
+
+  el.innerHTML = `
+    <h3>Question ${n}</h3>
+    <input class="mq-text" placeholder="Enter question">
+
+    ${["A", "B", "C", "D"].map((letter, index) => `
+      <div class="option-row">
+        <input class="mq-option" placeholder="Option ${letter}">
+        <label>
+          <input type="radio" name="correct${n}" value="${index}" ${index === 0 ? "checked" : ""}>
+          Correct
+        </label>
+      </div>
+    `).join("")}
+  `;
+
+  box.appendChild(el);
+}
+
+async function saveManualQuiz() {
+  const title = document.getElementById("manualTitle")?.value.trim() || "My Quiz";
+  const editors = [...document.querySelectorAll(".question-editor")];
+
+  if (!editors.length) {
+    showStatus("manualStatus", "Add at least one question.", "error");
+    return;
+  }
+
+  const questions = [];
+
+  for (const editor of editors) {
+    const question = editor.querySelector(".mq-text")?.value.trim();
+    const options = [...editor.querySelectorAll(".mq-option")].map(x => x.value.trim());
+    const answer = Number(editor.querySelector("input[type=radio]:checked")?.value);
+
+    if (!question || options.some(option => !option)) {
+      showStatus("manualStatus", "Complete every question and all four options.", "error");
+      return;
+    }
+
+    questions.push({ question, options, answer });
+  }
+
+  try {
+    await createQuiz({ title, questions }, "Teacher Created");
+    showStatus("manualStatus", "Quiz saved successfully!", "success");
+  } catch (error) {
+    showStatus("manualStatus", error.message, "error");
+  }
+}
+
+
+/* =========================================================
+   CREATE QUIZ
+   ========================================================= */
+
+async function createQuiz(quiz, method) {
+  const payload = {
+    ...normalizeQuiz(quiz),
+    method
+  };
+
+  const data = await api("/api/quizzes", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+
+  const createdQuiz = data.quiz || data;
+
+  showCreatedQuiz(createdQuiz);
+  return createdQuiz;
+}
+
+function showCreatedQuiz(quiz) {
+  const panel = document.getElementById("createdQuizPanel");
+  if (!panel) return;
+
+  panel.classList.remove("hidden");
+
+  panel.innerHTML = `
+    <div class="code-box">
+      <h2>Quiz Created Successfully!</h2>
+      <p>Your Quiz Code</p>
+      <div class="join-code">${escapeHtml(quiz.code)}</div>
+      <p>Share this code with your students.</p>
+    </div>
+
+    <h3>${escapeHtml(quiz.title)}</h3>
+    <p>${quiz.questions?.length || 0} questions • ${escapeHtml(quiz.method || "")}</p>
+
+    <button class="secondary-btn" onclick="showLeaderboard('${escapeHtml(quiz.code)}')">
+      View Leaderboard
+    </button>
+
+    <button class="primary-btn" onclick="createLiveQuiz('${escapeHtml(quiz.code)}')">
+      Start Live Quiz
+    </button>
+  `;
+
+  panel.scrollIntoView({ behavior: "smooth" });
+}
+
+
+/* =========================================================
+   STUDENT
+   ========================================================= */
+
+function openStudent() {
+  showView("studentView");
+}
+
+async function joinQuiz() {
+  const name = document.getElementById("studentName")?.value.trim();
+  const code = document.getElementById("studentCode")?.value.trim().toUpperCase();
+
+  if (!name || !code) {
+    showStatus("studentMessage", "Enter your name and quiz code.", "error");
+    return;
+  }
+
+  if (code.startsWith("LIV")) {
+    return joinLiveQuiz(name, code);
+  }
+
+  try {
+    const data = await api(`/api/quizzes/${encodeURIComponent(code)}`);
+    const quiz = data.quiz || data;
+
+    if (!quiz || !Array.isArray(quiz.questions)) {
+      throw new Error("Quiz not found.");
+    }
+
+    currentQuiz = quiz;
+    currentStudent = name;
+    renderQuiz();
+
+  } catch (error) {
+    showStatus("studentMessage", error.message, "error");
+  }
+}
+
+function renderQuiz() {
+  showView("quizView");
+
+  document.getElementById("quizTitle").textContent = currentQuiz.title || "Quiz";
+  document.getElementById("quizStudent").textContent =
+    `Student: ${currentStudent} • Code: ${currentQuiz.code}`;
+
+  document.getElementById("quizResult").innerHTML = "";
+
+  document.getElementById("quizQuestions").innerHTML =
+    currentQuiz.questions.map((question, index) => `
+      <div class="question-card">
+        <h3>${index + 1}. ${escapeHtml(question.question)}</h3>
+
+        ${(question.options || []).map((option, i) => `
+          <label class="quiz-option">
+            <input type="radio" name="q${index}" value="${i}">
+            ${escapeHtml(option)}
+          </label>
+        `).join("")}
+      </div>
+    `).join("");
+}
+
+
+/* =========================================================
+   SUBMIT NORMAL QUIZ
+   ========================================================= */
+
+async function submitQuiz() {
+  if (!currentQuiz) return;
+
+  let score = 0;
+  let answered = 0;
+
+  currentQuiz.questions.forEach((question, index) => {
+    const selected = document.querySelector(`input[name="q${index}"]:checked`);
+
+    if (selected) {
+      answered++;
+      if (Number(selected.value) === question.answer) score++;
+    }
+  });
+
+  const total = currentQuiz.questions.length;
+
+  try {
+    const data = await api(`/api/quizzes/${encodeURIComponent(currentQuiz.code)}/results`, {
+      method: "POST",
+      body: JSON.stringify({
+        name: currentStudent,
+        answers: [...currentQuiz.questions].map((_, index) =>
+          Number(document.querySelector(`input[name="q${index}"]:checked`)?.value ?? -1)
+        )
+      })
+    });
+
+    const result = data.result || {};
+    const resultBox = document.getElementById("quizResult");
+
+    resultBox.innerHTML = `
+      <div class="result-box">
+        <h2>Quiz Completed!</h2>
+        <p>${escapeHtml(currentStudent)}, your score:</p>
+        <h1>${result.score ?? score}/${result.total ?? total}</h1>
+        <p>${result.percentage ?? Math.round(score / Math.max(total, 1) * 100)}%</p>
+        <p>Answered ${answered} of ${total} questions.</p>
+        <p>Your Rank: #${result.rank ?? "—"}</p>
+        <button class="secondary-btn" onclick="showLeaderboard('${escapeHtml(currentQuiz.code)}')">
+          View Leaderboard
+        </button>
+      </div>
+    `;
+
+    document.querySelectorAll("#quizQuestions input").forEach(input => {
+      input.disabled = true;
+    });
+
+  } catch (error) {
+    showStatus("quizResult", error.message, "error");
+  }
+}
+
+
+/* =========================================================
+   LEADERBOARD
+   ========================================================= */
+
+async function getSharedLeaderboard(code) {
+  return await api(`/api/quizzes/${encodeURIComponent(code)}/results`);
+}
+
+async function showLeaderboard(code) {
+  try {
+    const data = await getSharedLeaderboard(code);
+    const leaderboard = data.leaderboard || [];
+
+    document.getElementById("sharedLeaderboardModal")?.remove();
+
+    const modal = document.createElement("div");
+    modal.id = "sharedLeaderboardModal";
+    modal.style.cssText = `
+      position:fixed; inset:0; z-index:99999;
+      background:rgba(0,0,0,.65); display:flex;
+      align-items:center; justify-content:center; padding:20px;
+    `;
+
+    modal.innerHTML = `
+      <div style="background:white;width:min(700px,95vw);max-height:85vh;overflow:auto;padding:25px;border-radius:18px;">
+        <h2>Leaderboard</h2>
+        <p>Quiz Code: ${escapeHtml(code)}</p>
+        <p>Participants: ${data.participants ?? leaderboard.length}</p>
+
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr><th>Rank</th><th>Student</th><th>Score</th><th>%</th></tr></thead>
+          <tbody>
+            ${leaderboard.map(item => `
+              <tr>
+                <td>#${item.rank}</td>
+                <td>${escapeHtml(item.name)}</td>
+                <td>${item.score}/${item.total}</td>
+                <td>${item.percentage}%</td>
+              </tr>
+            `).join("") || `<tr><td colspan="4">No results yet.</td></tr>`}
+          </tbody>
+        </table>
+
+        <button id="closeLeaderboard" class="secondary-btn">Close</button>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+    document.getElementById("closeLeaderboard").onclick = () => modal.remove();
+    modal.onclick = event => {
+      if (event.target === modal) modal.remove();
     };
 
+  } catch (error) {
+    alert(error.message);
+  }
+}
 
-    localStorage.setItem(
-      "zbq_live_host",
-      JSON.stringify(liveHostSession)
-    );
 
+/* =========================================================
+   LIVE QUIZ — HOST
+   ========================================================= */
+
+async function createLiveQuiz(quizCode) {
+  try {
+    const data = await api("/api/live", {
+      method: "POST",
+      body: JSON.stringify({ quizCode })
+    });
+
+    liveHostSession = {
+      liveCode: data.liveCode,
+      hostToken: data.hostToken,
+      quizCode
+    };
 
     showLiveHostPanel();
 
-
   } catch (error) {
-
-    console.error(
-      "Live Quiz creation error:",
-      error
-    );
-
-
-    alert(
-      "❌ " +
-      (error.message || "Could not create Live Quiz.")
-    );
-
+    alert(error.message);
   }
-
 }
-
-
-/* =========================================================
-   LIVE HOST PANEL
-   ========================================================= */
 
 function showLiveHostPanel() {
-
-  const panel =
-    document.getElementById("createdQuizPanel");
-
-
-  if (!panel) return;
-
+  const panel = document.getElementById("createdQuizPanel");
+  if (!panel || !liveHostSession) return;
 
   panel.innerHTML = `
+    <h2>Live Quiz Ready</h2>
+    <div class="join-code">${escapeHtml(liveHostSession.liveCode)}</div>
+    <p>Share this Live Quiz code with students.</p>
 
-    <div class="code-box">
-
-      <h2>🔴 Live Quiz Ready</h2>
-
-      <p>Share this Live Quiz Code with your students:</p>
-
-      <div class="join-code"
-           id="liveHostCode">
-
-        ${escapeHtml(
-          liveHostSession.liveCode
-        )}
-
-      </div>
-
-      <p>
-        Students should enter this code from
-        the Student section.
-      </p>
-
+    <div id="liveHostPanel">
+      <p id="liveHostStatus">Waiting for students...</p>
+      <div id="liveHostParticipants"></div>
+      <button id="liveStartButton" onclick="startLiveQuiz()" disabled>Start Live Quiz</button>
     </div>
-
-
-    <div id="liveHostPanel"
-         style="
-           margin-top:20px;
-           padding:20px;
-           border-radius:18px;
-           background:#f5f8ff;
-         ">
-
-      <h2>👥 Waiting for Students...</h2>
-
-      <p id="liveHostStatus">
-        Connecting...
-      </p>
-
-      <div id="liveHostParticipants"
-           style="margin-top:15px;">
-      </div>
-
-      <button
-        id="liveStartButton"
-        class="primary-btn"
-        onclick="startLiveQuiz()"
-        disabled>
-
-        ▶️ Start Live Quiz
-
-      </button>
-
-    </div>
-
   `;
-
-
-  panel.scrollIntoView({
-    behavior: "smooth"
-  });
-
 
   pollLiveHost();
-
 }
-
-
-/* =========================================================
-   LIVE HOST POLLING
-   ========================================================= */
 
 async function pollLiveHost() {
-
   if (!liveHostSession) return;
 
-
   try {
-
-    const response =
-      await fetch(
-        "/api/live/" +
-        encodeURIComponent(
-          liveHostSession.liveCode
-        ) +
-        "/host-state?token=" +
-        encodeURIComponent(
-          liveHostSession.hostToken
-        )
-      );
-
-
-    const data =
-      await response.json();
-
-
-    if (!response.ok) {
-
-      throw new Error(
-        data.error ||
-        "Could not read Live Quiz."
-      );
-
-    }
-
+    const data = await api(
+      `/api/live/${encodeURIComponent(liveHostSession.liveCode)}/host-state?token=${encodeURIComponent(liveHostSession.hostToken)}`
+    );
 
     renderLiveHostState(data);
-
-
-  } catch (error) {
-
-    console.error(
-      "Live host polling error:",
-      error
-    );
-
-  }
-
+  } catch {}
 
   clearTimeout(liveHostTimer);
-
-
-  liveHostTimer =
-    setTimeout(
-      pollLiveHost,
-      1000
-    );
-
+  liveHostTimer = setTimeout(pollLiveHost, 1000);
 }
-
-
-/* =========================================================
-   RENDER HOST STATE
-   ========================================================= */
 
 function renderLiveHostState(data) {
+  const state = data.state || data;
+  const participants = data.participants || state.participants || [];
+  const phase = String(state.phase || state.status || "waiting").toLowerCase();
 
-  const status =
-    document.getElementById(
-      "liveHostStatus"
-    );
-
-
-  const participantsBox =
-    document.getElementById(
-      "liveHostParticipants"
-    );
-
-
-  const startButton =
-    document.getElementById(
-      "liveStartButton"
-    );
-
-
-  if (!status) return;
-
-
-  const participants =
-    data.participants || [];
-
-
-  data = data && data.state ? data.state : data;
-
-const phase = String(
-  data.phase || data.status || "waiting"
-).toLowerCase();
-
+  const status = document.getElementById("liveHostStatus");
+  const participantBox = document.getElementById("liveHostParticipants");
+  const startButton = document.getElementById("liveStartButton");
 
   if (phase === "waiting") {
+    if (status) status.textContent = `${participants.length} student(s) joined`;
+    if (startButton) startButton.disabled = participants.length === 0;
 
-    status.innerHTML =
-      `
-      <strong>
-        👥 ${participants.length}
-        student(s) joined
-      </strong>
-      <br>
-      Waiting for students...
-      `;
-
-
-    if (startButton) {
-
-      startButton.disabled =
-        participants.length === 0;
-
+    if (participantBox) {
+      participantBox.innerHTML = participants.map(p =>
+        `<p>${escapeHtml(p.name)} ${p.answered ? "Answered" : "Waiting"}</p>`
+      ).join("") || "No students joined yet.";
     }
-
-
-    if (participants.length === 0) {
-
-      participantsBox.innerHTML =
-        `
-        <div class="status">
-          No students have joined yet.
-        </div>
-        `;
-
-    } else {
-
-      participantsBox.innerHTML =
-        `
-        <div
-          style="
-            display:grid;
-            gap:10px;
-          ">
-
-          ${
-            participants
-              .map(
-                (student, index) => `
-
-                  <div
-                    style="
-                      padding:12px;
-                      background:white;
-                      border-radius:12px;
-                      border:1px solid #e5e7eb;
-                    ">
-
-                    👤
-                    <strong>
-                      ${escapeHtml(
-                        student.name ||
-                        "Student " +
-                        (index + 1)
-                      )}
-                    </strong>
-
-                    <span
-                      style="
-                        float:right;
-                        color:#666;
-                      ">
-
-                      ${
-                        student.answered
-                          ? "✅ Answered"
-                          : "⏳ Waiting"
-                      }
-
-                    </span>
-
-                  </div>
-
-                `
-              )
-              .join("")
-          }
-
-        </div>
-        `;
-
-    }
-
-    return;
+  } else if (phase === "active" || phase === "live") {
+    if (startButton) startButton.style.display = "none";
+    renderLiveHostQuestion(state);
+  } else if (phase === "finished" || phase === "ended") {
+    renderLiveHostFinal(state);
   }
-
-
-  if (phase === "active" || phase === "live") {
-
-    if (startButton) {
-
-      startButton.style.display =
-        "none";
-
-    }
-
-
-    renderLiveHostQuestion(
-      data
-    );
-
-
-    return;
-  }
-
-
-  if (
-    phase === "finished" ||
-    phase === "ended"
-  ) {
-
-    if (startButton) {
-
-      startButton.style.display =
-        "none";
-
-    }
-
-
-    renderLiveHostFinal(
-      data
-    );
-
-  }
-
 }
-
-
-/* =========================================================
-   HOST QUESTION
-   ========================================================= */
 
 function renderLiveHostQuestion(data) {
-
-  const panel =
-    document.getElementById(
-      "liveHostPanel"
-    );
-
-
+  const panel = document.getElementById("liveHostPanel");
   if (!panel) return;
 
-
-  const question =
-    data.question || null;
-
-
-  const questionNumber =
-    Number(
-      data.currentQuestionIndex || 0
-    ) + 1;
-
-
-  const total =
-    Number(
-      data.totalQuestions ||
-      0
-    );
-
-
-  const answered =
-    Number(
-      data.answeredCount ||
-      0
-    );
-
-
-  if (!question) {
-
-    panel.innerHTML = `
-
-      <h2>🔴 Live Quiz</h2>
-
-      <div class="status">
-        Loading question...
-      </div>
-
-    `;
-
-    return;
-  }
-
+  const question = data.question;
+  if (!question) return;
 
   panel.innerHTML = `
-
-    <div
-      style="
-        display:flex;
-        justify-content:space-between;
-        gap:15px;
-        flex-wrap:wrap;
-        align-items:center;
-      ">
-
-      <h2>
-        🔴 Question
-        ${questionNumber}/${total}
-      </h2>
-
-      <div
-        id="liveHostTimer"
-        style="
-          font-size:28px;
-          font-weight:800;
-        ">
-
-        60
-
-      </div>
-
-    </div>
-
-
-    <div
-      style="
-        margin-top:20px;
-        padding:20px;
-        background:white;
-        border-radius:16px;
-      ">
-
-      <h3>
-        ${escapeHtml(
-          question.question || ""
-        )}
-      </h3>
-
-
-      <div
-        style="
-          display:grid;
-          gap:10px;
-          margin-top:15px;
-        ">
-
-        ${
-          (question.options || [])
-            .map(
-              (option, index) => `
-
-                <div
-                  style="
-                    padding:12px;
-                    border:1px solid #ddd;
-                    border-radius:10px;
-                  ">
-
-                  ${
-                    String.fromCharCode(
-                      65 + index
-                    )
-                  }.
-                  ${escapeHtml(option)}
-
-                </div>
-
-              `
-            )
-            .join("")
-        }
-
-      </div>
-
-    </div>
-
-
-    <div
-      style="
-        margin-top:15px;
-        padding:15px;
-        border-radius:12px;
-        background:#eef5ff;
-      ">
-
-      👥 Students answered:
-      <strong>
-        ${answered}
-      </strong>
-      /
-      <strong>
-        ${
-          (data.participants || []).length
-        }
-      </strong>
-
-    </div>
-
+    <h2>Question ${Number(data.currentQuestionIndex || 0) + 1}/${data.totalQuestions || 0}</h2>
+    <div id="liveHostTimer">60</div>
+    <h3>${escapeHtml(question.question)}</h3>
+    ${(question.options || []).map((option, i) =>
+      `<div class="quiz-option">${String.fromCharCode(65 + i)}. ${escapeHtml(option)}</div>`
+    ).join("")}
+    <p>Students answered: ${data.answeredCount || 0}/${(data.participants || []).length}</p>
   `;
 
-
-  updateLiveCountdown(
-    "liveHostTimer",
-    data.deadline
-  );
-
+  updateLiveCountdown("liveHostTimer", data.deadline);
 }
-
-
-/* =========================================================
-   START LIVE QUIZ
-   ========================================================= */
 
 async function startLiveQuiz() {
-
-  if (!liveHostSession) {
-
-    alert(
-      "Live Quiz session not found."
-    );
-
-    return;
-  }
-
+  if (!liveHostSession) return;
 
   try {
+    const data = await api(`/api/live/${encodeURIComponent(liveHostSession.liveCode)}/start`, {
+      method: "POST",
+      body: JSON.stringify({ hostToken: liveHostSession.hostToken })
+    });
 
-    const response =
-      await fetch(
-        "/api/live/" +
-        encodeURIComponent(
-          liveHostSession.liveCode
-        ) +
-        "/start",
-        {
-          method: "POST",
-
-          headers: {
-            "Content-Type":
-              "application/json"
-          },
-
-          body: JSON.stringify({
-
-            
-hostToken:
-  liveHostSession.hostToken
-
-
-          })
-
-        }
-      );
-
-
-    const data =
-      await response.json();
-
-
-    if (!response.ok) {
-
-      throw new Error(
-        data.error ||
-        "Could not start Live Quiz."
-      );
-
-    }
-
-
-    
-renderLiveHostState(
-  data.state || data
-);
-
-
-
+    renderLiveHostState(data.state || data);
   } catch (error) {
-
-    alert(
-      "❌ " +
-      (
-        error.message ||
-        "Could not start Live Quiz."
-      )
-    );
-
+    alert(error.message);
   }
-
 }
-
-
-/* =========================================================
-   HOST FINAL
-   ========================================================= */
 
 function renderLiveHostFinal(data) {
-
-  const panel =
-    document.getElementById(
-      "liveHostPanel"
-    );
-
-
+  const panel = document.getElementById("liveHostPanel");
   if (!panel) return;
 
-
-  const leaderboard =
-    data.leaderboard || [];
-
-
   panel.innerHTML = `
-
-    <div class="result-box">
-
-      <h2>
-        🏆 Live Quiz Finished!
-      </h2>
-
-      <p>
-        Final leaderboard
-      </p>
-
-
-      <div
-        style="
-          overflow-x:auto;
-          margin-top:15px;
-        ">
-
-        <table
-          style="
-            width:100%;
-            border-collapse:collapse;
-          ">
-
-          <thead>
-
-            <tr
-              style="
-                background:#f2f6ff;
-              ">
-
-              <th style="padding:10px;">
-                Rank
-              </th>
-
-              <th style="padding:10px;">
-                Student
-              </th>
-
-              <th style="padding:10px;">
-                Score
-              </th>
-
-              <th style="padding:10px;">
-                Percentage
-              </th>
-
-            </tr>
-
-          </thead>
-
-          <tbody>
-
-            ${
-              leaderboard.length
-                ? leaderboard
-                    .map(
-                      item => `
-
-                        <tr>
-
-                          <td
-                            style="
-                              padding:10px;
-                              text-align:center;
-                            ">
-
-                            #${item.rank}
-
-                          </td>
-
-                          <td
-                            style="
-                              padding:10px;
-                            ">
-
-                            ${escapeHtml(
-                              item.name || ""
-                            )}
-
-                          </td>
-
-                          <td
-                            style="
-                              padding:10px;
-                              text-align:center;
-                            ">
-
-                            ${item.score}/${item.total}
-
-                          </td>
-
-                          <td
-                            style="
-                              padding:10px;
-                              text-align:center;
-                            ">
-
-                            ${item.percentage}%
-
-                          </td>
-
-                        </tr>
-
-                      `
-                    )
-                    .join("")
-                : `
-                    <tr>
-
-                      <td
-                        colspan="4"
-                        style="
-                          padding:20px;
-                          text-align:center;
-                        ">
-
-                        No results yet.
-
-                      </td>
-
-                    </tr>
-                  `
-            }
-
-          </tbody>
-
-        </table>
-
-      </div>
-
-    </div>
-
+    <h2>Live Quiz Finished!</h2>
+    ${renderLeaderboardTable(data.leaderboard || [])}
   `;
-
 }
 
 
 /* =========================================================
-   STUDENT JOIN OVERRIDE
+   LIVE QUIZ — STUDENT
    ========================================================= */
 
-async function liveAwareJoinQuiz() {
-
-  const name =
-    document
-      .getElementById(
-        "studentName"
-      )
-      .value
-      .trim();
-
-
-  const code =
-    document
-      .getElementById(
-        "studentCode"
-      )
-      .value
-      .trim()
-      .toUpperCase();
-
-
-  const msg =
-    document.getElementById(
-      "studentMessage"
-    );
-
-
-  if (!name || !code) {
-
-    msg.innerHTML =
-      `
-      <div class="status error">
-        Please enter your name and quiz code.
-      </div>
-      `;
-
-    return;
-  }
-
-
-  /*
-    Normal quiz
-  */
-
-  if (!code.startsWith("LIV")) {
-
-    await joinNormalQuizFromOriginal(
-      name,
-      code
-    );
-
-    return;
-  }
-
-
-  /*
-    Live quiz
-  */
-
-  await joinLiveQuiz(
-    name,
-    code
-  );
-
-}
-
-
-/* =========================================================
-   NORMAL QUIZ JOIN
-   ========================================================= */
-
-async function joinNormalQuizFromOriginal(
-  name,
-  code
-) {
-
-  const msg =
-    document.getElementById(
-      "studentMessage"
-    );
-
-
-  msg.innerHTML =
-    `
-    <div class="status">
-      🔍 Finding your quiz...
-    </div>
-    `;
-
-
+async function joinLiveQuiz(name, liveCode) {
   try {
-
-    const response =
-      await fetch(
-        "/api/quizzes/" +
-        encodeURIComponent(code)
-      );
-
-
-    const data =
-      await response.json();
-
-
-    if (!response.ok) {
-
-      throw new Error(
-        data.error ||
-        "Quiz not found."
-      );
-
-    }
-
-
-    const quiz =
-      data.quiz || data;
-
-
-    if (
-      !quiz ||
-      !Array.isArray(
-        quiz.questions
-      )
-    ) {
-
-      throw new Error(
-        "Invalid quiz data received."
-      );
-
-    }
-
-
-    currentQuiz =
-      quiz;
-
-
-    currentStudent =
-      name;
-
-
-    renderQuiz();
-
-
-  } catch (error) {
-
-    console.error(
-      "Join Quiz Error:",
-      error
-    );
-
-
-    msg.innerHTML =
-      `
-      <div class="status error">
-
-        ❌
-        ${escapeHtml(
-          error.message ||
-          "Quiz not found."
-        )}
-
-      </div>
-      `;
-
-  }
-
-}
-
-
-/* =========================================================
-   JOIN LIVE QUIZ
-   ========================================================= */
-
-async function joinLiveQuiz(
-  name,
-  liveCode
-) {
-
-  const msg =
-    document.getElementById(
-      "studentMessage"
-    );
-
-
-  msg.innerHTML =
-    `
-    <div class="status">
-      🔴 Joining Live Quiz...
-    </div>
-    `;
-
-
-  try {
-
-    const response =
-      await fetch(
-        "/api/live/" +
-        encodeURIComponent(
-          liveCode
-        ) +
-        "/join",
-        {
-          method: "POST",
-
-          headers: {
-            "Content-Type":
-              "application/json"
-          },
-
-          body: JSON.stringify({
-
-            name: name
-
-          })
-
-        }
-      );
-
-
-    const data =
-      await response.json();
-
-
-    if (!response.ok) {
-
-      throw new Error(
-        data.error ||
-        "Could not join Live Quiz."
-      );
-
-    }
-
+    const data = await api(`/api/live/${encodeURIComponent(liveCode)}/join`, {
+      method: "POST",
+      body: JSON.stringify({ name })
+    });
 
     liveStudentSession = {
-
-      liveCode:
-        liveCode,
-
-      
-studentToken:
-  data.participantToken || data.studentToken,
-
-
-      name:
-        name
-
+      liveCode,
+      studentToken: data.participantToken || data.studentToken,
+      name
     };
-
-
-    sessionStorage.setItem(
-      "zbq_live_student",
-      JSON.stringify(
-        liveStudentSession
-      )
-    );
-
 
     showLiveStudentPanel();
 
-
   } catch (error) {
-
-    console.error(
-      "Live join error:",
-      error
-    );
-
-
-    msg.innerHTML =
-      `
-      <div class="status error">
-
-        ❌
-        ${escapeHtml(
-          error.message ||
-          "Could not join Live Quiz."
-        )}
-
-      </div>
-      `;
-
+    showStatus("studentMessage", error.message, "error");
   }
-
 }
-
-
-/* =========================================================
-   STUDENT LIVE PANEL
-   ========================================================= */
 
 function showLiveStudentPanel() {
+  showView("studentView");
 
-  showView(
-    "studentView"
-  );
-
-
-  const msg =
-    document.getElementById(
-      "studentMessage"
-    );
-
+  const msg = document.getElementById("studentMessage");
+  if (!msg) return;
 
   msg.innerHTML = `
-
-    <div
-      id="liveStudentPanel"
-      style="
-        margin-top:20px;
-        padding:20px;
-        border-radius:18px;
-        background:#f5f8ff;
-      ">
-
-      <h2>
-        🔴 Live Quiz
-      </h2>
-
-      <div id="liveStudentContent">
-
-        <div class="status">
-          ⏳ Waiting for host to start...
-        </div>
-
-      </div>
-
+    <div id="liveStudentPanel">
+      <h2>Live Quiz</h2>
+      <div id="liveStudentContent">Waiting for host...</div>
     </div>
-
   `;
-
 
   pollLiveStudent();
-
 }
-
-
-/* =========================================================
-   STUDENT POLLING
-   ========================================================= */
 
 async function pollLiveStudent() {
-
   if (!liveStudentSession) return;
 
-
   try {
-
-    const response =
-      await fetch(
-        "/api/live/" +
-        encodeURIComponent(
-          liveStudentSession.liveCode
-        ) +
-        "/state?token=" +
-        encodeURIComponent(
-          liveStudentSession.studentToken
-        )
-      );
-
-
-    const data =
-      await response.json();
-
-
-    if (!response.ok) {
-
-      throw new Error(
-        data.error ||
-        "Live Quiz connection failed."
-      );
-
-    }
-
-
-    renderLiveStudentState(
-      data
+    const data = await api(
+      `/api/live/${encodeURIComponent(liveStudentSession.liveCode)}/state?token=${encodeURIComponent(liveStudentSession.studentToken)}`
     );
 
+    renderLiveStudentState(data);
+  } catch {}
 
-  } catch (error) {
-
-    console.error(
-      "Live student polling error:",
-      error
-    );
-
-  }
-
-
-  clearTimeout(
-    liveStudentTimer
-  );
-
-
-  liveStudentTimer =
-    setTimeout(
-      pollLiveStudent,
-      1000
-    );
-
+  clearTimeout(liveStudentTimer);
+  liveStudentTimer = setTimeout(pollLiveStudent, 1000);
 }
 
-
-/* =========================================================
-   STUDENT STATE
-   ========================================================= */
-
-function renderLiveStudentState(
-  data
-) {
-
-  const box =
-    document.getElementById(
-      "liveStudentContent"
-    );
-
-
-  if (!box) return;
-
-
-  
-const phase = String(
-  data.status || data.phase || "waiting"
-).toLowerCase();
-
-
+function renderLiveStudentState(data) {
+  const phase = String(data.status || data.phase || "waiting").toLowerCase();
 
   if (phase === "waiting") {
-
-    box.innerHTML = `
-
-      <div class="status">
-
-        ⏳ Waiting for the host...
-
-      </div>
-
-
-      <p
-        style="
-          text-align:center;
-          margin-top:15px;
-        ">
-
-        You have joined successfully.
-
-        <br>
-
-        <strong>
-          ${escapeHtml(
-            liveStudentSession.name
-          )}
-        </strong>
-
-      </p>
-
-    `;
-
-    return;
+    const box = document.getElementById("liveStudentContent");
+    if (box) box.innerHTML = `<p>Waiting for host to start...</p>`;
+  } else if (phase === "active" || phase === "live") {
+    renderLiveStudentQuestion(data);
+  } else if (phase === "finished" || phase === "ended") {
+    renderLiveStudentFinal(data);
   }
-
-
-  
-if (phase === "active" || phase === "live") {
-
-
-    renderLiveStudentQuestion(
-      data
-    );
-
-    return;
-  }
-
-
-  if (
-    phase === "finished" ||
-    phase === "ended"
-  ) {
-
-    renderLiveStudentFinal(
-      data
-    );
-
-  }
-
 }
 
+function renderLiveStudentQuestion(data) {
+  const box = document.getElementById("liveStudentContent");
+  if (!box || !data.question) return;
 
-/* =========================================================
-   STUDENT QUESTION
-   ========================================================= */
-
-function renderLiveStudentQuestion(
-  data
-) {
-
-  const box =
-    document.getElementById(
-      "liveStudentContent"
-    );
-
-
-  if (!box) return;
-  
-window.liveStudentQuestionIndex =
-  Number(data.currentQuestionIndex || 0);
-
-
-
-  const question =
-    data.question;
-
-
-  if (!question) {
-
-    box.innerHTML =
-      `
-      <div class="status">
-        Loading question...
-      </div>
-      `;
-
-    return;
-  }
-
-
-  const questionNumber =
-    Number(
-      data.currentQuestionIndex || 0
-    ) + 1;
-
-
-  const total =
-    Number(
-      data.totalQuestions ||
-      0
-    );
-
-
-  const alreadyAnswered =
-    data.answered === true;
-
+  const questionIndex = Number(data.currentQuestionIndex || 0);
 
   box.innerHTML = `
+    <h2>Question ${questionIndex + 1}/${data.totalQuestions}</h2>
+    <div id="liveStudentTimer">60</div>
+    <h3>${escapeHtml(data.question.question)}</h3>
 
-    <div
-      style="
-        display:flex;
-        justify-content:space-between;
-        align-items:center;
-        gap:10px;
-      ">
+    ${(data.question.options || []).map((option, index) => `
+      <label class="quiz-option">
+        <input type="radio" name="liveAnswer" value="${index}" ${data.answered ? "disabled" : ""}>
+        ${String.fromCharCode(65 + index)}. ${escapeHtml(option)}
+      </label>
+    `).join("")}
 
-      <h2>
-        Question
-        ${questionNumber}/${total}
-      </h2>
+    <button id="liveAnswerButton" onclick="submitLiveAnswer()" ${data.answered ? "disabled" : ""}>
+      ${data.answered ? "Answer Submitted" : "Submit Answer"}
+    </button>
 
-      <div
-        id="liveStudentTimer"
-        style="
-          font-size:28px;
-          font-weight:800;
-        ">
-
-        60
-
-      </div>
-
-    </div>
-
-
-    <div
-      style="
-        margin-top:20px;
-        padding:20px;
-        background:white;
-        border-radius:16px;
-      ">
-
-      <h3>
-
-        ${escapeHtml(
-          question.question || ""
-        )}
-
-      </h3>
-
-
-      <div
-        style="
-          display:grid;
-          gap:12px;
-          margin-top:20px;
-        ">
-
-        ${
-          (question.options || [])
-            .map(
-              (option, index) => `
-
-                <label
-                  class="quiz-option"
-                  style="
-                    cursor:pointer;
-                    display:block;
-                    padding:14px;
-                  ">
-
-                  <input
-                    type="radio"
-                    name="liveAnswer"
-                    value="${index}"
-                    ${
-                      alreadyAnswered
-                        ? "disabled"
-                        : ""
-                    }>
-
-                  <span>
-
-                    ${
-                      String.fromCharCode(
-                        65 + index
-                      )
-                    }.
-
-                    ${escapeHtml(option)}
-
-                  </span>
-
-                </label>
-
-              `
-            )
-            .join("")
-        }
-
-      </div>
-
-
-      <button
-        id="liveAnswerButton"
-        class="primary-btn"
-        style="margin-top:20px;"
-        onclick="submitLiveAnswer()"
-        ${
-          alreadyAnswered
-            ? "disabled"
-            : ""
-        }>
-
-        ${
-          alreadyAnswered
-            ? "✅ Answer Submitted"
-            : "Submit Answer"
-        }
-
-      </button>
-
-
-      <div
-        id="liveAnswerStatus"
-        style="margin-top:15px;">
-
-        ${
-          alreadyAnswered
-            ? `
-              <div class="status success">
-                Your answer has been submitted.
-                Waiting for the next question...
-              </div>
-            `
-            : ""
-        }
-
-      </div>
-
-    </div>
-
+    <div id="liveAnswerStatus">${data.answered ? "Answer submitted." : ""}</div>
   `;
 
-
-  updateLiveCountdown(
-    "liveStudentTimer",
-    data.deadline
-  );
-
+  window.liveStudentQuestionIndex = questionIndex;
+  updateLiveCountdown("liveStudentTimer", data.deadline);
 }
-
-
-/* =========================================================
-   SUBMIT LIVE ANSWER
-   ========================================================= */
 
 async function submitLiveAnswer() {
+  const selected = document.querySelector('input[name="liveAnswer"]:checked');
+  if (!selected || !liveStudentSession) return;
 
-  if (!liveStudentSession) {
-
-    alert(
-      "Live Quiz session not found."
-    );
-
-    return;
-  }
-
-
-  const selected =
-    document.querySelector(
-      'input[name="liveAnswer"]:checked'
-    );
-
-
-  if (!selected) {
-
-    alert(
-      "Please select an answer."
-    );
-
-    return;
-  }
-
-
-  const button =
-    document.getElementById(
-      "liveAnswerButton"
-    );
-
-
-  if (button) {
-
-    button.disabled =
-      true;
-
-  }
-
+  const button = document.getElementById("liveAnswerButton");
+  if (button) button.disabled = true;
 
   try {
+    await api(`/api/live/${encodeURIComponent(liveStudentSession.liveCode)}/answer`, {
+      method: "POST",
+      body: JSON.stringify({
+        participantToken: liveStudentSession.studentToken,
+        questionIndex: Number(window.liveStudentQuestionIndex || 0),
+        answer: Number(selected.value)
+      })
+    });
 
-    const response =
-      await fetch(
-        "/api/live/" +
-        encodeURIComponent(
-          liveStudentSession.liveCode
-        ) +
-        "/answer",
-        {
-          method: "POST",
+    document.querySelectorAll('input[name="liveAnswer"]').forEach(input => {
+      input.disabled = true;
+    });
 
-          headers: {
-            "Content-Type":
-              "application/json"
-          },
-
-          body: JSON.stringify({
-
-            
-participantToken:
-  liveStudentSession.studentToken,
-
-questionIndex:
-  Number(
-    document.getElementById("liveStudentTimer")
-      ? (window.liveStudentQuestionIndex || 0)
-      : 0
-  ),
-
-answer:
-  Number(
-    selected.value
-  )
-
-
-          })
-
-        }
-      );
-
-
-    const data =
-      await response.json();
-
-
-    if (!response.ok) {
-
-      throw new Error(
-        data.error ||
-        "Could not submit answer."
-      );
-
-    }
-
-
-    document
-      .querySelectorAll(
-        'input[name="liveAnswer"]'
-      )
-      .forEach(
-        input => {
-          input.disabled =
-            true;
-        }
-      );
-
-
-    const status =
-      document.getElementById(
-        "liveAnswerStatus"
-      );
-
-
-    if (status) {
-
-      status.innerHTML =
-        `
-        <div class="status success">
-
-          ✅ Answer submitted!
-
-          <br>
-
-          Waiting for the next question...
-
-        </div>
-        `;
-
-    }
-
+    const status = document.getElementById("liveAnswerStatus");
+    if (status) status.textContent = "Answer submitted. Waiting for next question.";
 
   } catch (error) {
-
-    console.error(
-      "Live answer error:",
-      error
-    );
-
-
-    if (button) {
-
-      button.disabled =
-        false;
-
-    }
-
-
-    alert(
-      "❌ " +
-      (
-        error.message ||
-        "Could not submit answer."
-      )
-    );
-
+    if (button) button.disabled = false;
+    alert(error.message);
   }
-
 }
 
-
-/* =========================================================
-   STUDENT FINAL RESULT
-   ========================================================= */
-
-function renderLiveStudentFinal(
-  data
-) {
-
-  const box =
-    document.getElementById(
-      "liveStudentContent"
-    );
-
-
+function renderLiveStudentFinal(data) {
+  const box = document.getElementById("liveStudentContent");
   if (!box) return;
 
-
-  const result =
-    data.result || {};
-
-
-  const leaderboard =
-    data.leaderboard || [];
-
+  const result = data.result || {};
 
   box.innerHTML = `
-
-    <div class="result-box">
-
-      <h2>
-        🎉 Live Quiz Completed!
-      </h2>
-
-
-      <p>
-
-        <strong>
-          ${escapeHtml(
-            liveStudentSession.name
-          )}
-        </strong>
-
-      </p>
-
-
-      <h1
-        style="
-          text-align:center;
-          margin:20px 0;
-        ">
-
-        ${
-          result.score !== undefined
-            ? result.score
-            : 0
-        }
-
-        /
-
-        ${
-          result.total !== undefined
-            ? result.total
-            : data.totalQuestions || 0
-        }
-
-      </h1>
-
-
-      <p
-        style="
-          text-align:center;
-          font-size:20px;
-        ">
-
-        ${
-          result.percentage !== undefined
-            ? result.percentage
-            : 0
-        }%
-
-      </p>
-
-
-      ${
-        result.rank
-          ? `
-            <div
-              class="student-rank"
-              style="margin-top:15px;">
-
-              🏆 Your Rank:
-              <strong>
-                #${result.rank}
-              </strong>
-
-            </div>
-          `
-          : ""
-      }
-
-
-      <h3
-        style="
-          margin-top:25px;
-        ">
-
-        🏆 Final Leaderboard
-
-      </h3>
-
-
-      <div
-        style="
-          overflow-x:auto;
-          margin-top:15px;
-        ">
-
-        <table
-          style="
-            width:100%;
-            border-collapse:collapse;
-          ">
-
-          <thead>
-
-            <tr
-              style="
-                background:#f2f6ff;
-              ">
-
-              <th style="padding:10px;">
-                Rank
-              </th>
-
-              <th style="padding:10px;">
-                Student
-              </th>
-
-              <th style="padding:10px;">
-                Score
-              </th>
-
-              <th style="padding:10px;">
-                %
-              </th>
-
-            </tr>
-
-          </thead>
-
-          <tbody>
-
-            ${
-              leaderboard
-                .map(
-                  item => `
-
-                    <tr>
-
-                      <td
-                        style="
-                          padding:10px;
-                          text-align:center;
-                        ">
-
-                        #${item.rank}
-
-                      </td>
-
-                      <td
-                        style="
-                          padding:10px;
-                        ">
-
-                        ${escapeHtml(
-                          item.name || ""
-                        )}
-
-                      </td>
-
-                      <td
-                        style="
-                          padding:10px;
-                          text-align:center;
-                        ">
-
-                        ${item.score}/${item.total}
-
-                      </td>
-
-                      <td
-                        style="
-                          padding:10px;
-                          text-align:center;
-                        ">
-
-                        ${item.percentage}%
-
-                      </td>
-
-                    </tr>
-
-                  `
-                )
-                .join("")
-            }
-
-          </tbody>
-
-        </table>
-
-      </div>
-
-    </div>
-
+    <h2>Live Quiz Completed!</h2>
+    <h3>${escapeHtml(liveStudentSession?.name || "")}</h3>
+    <h1>${result.score ?? 0}/${result.total ?? data.totalQuestions ?? 0}</h1>
+    <p>${result.percentage ?? 0}%</p>
+    <p>Rank: #${result.rank ?? "—"}</p>
+    ${renderLeaderboardTable(data.leaderboard || [])}
   `;
-
 }
 
 
 /* =========================================================
-   LIVE COUNTDOWN
+   LEADERBOARD TABLE
    ========================================================= */
 
-function updateLiveCountdown(
-  elementId,
-  deadline
-) {
+function renderLeaderboardTable(items) {
+  return `
+    <table style="width:100%;border-collapse:collapse">
+      <thead>
+        <tr><th>Rank</th><th>Student</th><th>Score</th><th>%</th></tr>
+      </thead>
+      <tbody>
+        ${items.map(item => `
+          <tr>
+            <td>#${item.rank}</td>
+            <td>${escapeHtml(item.name)}</td>
+            <td>${item.score}/${item.total}</td>
+            <td>${item.percentage}%</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+}
 
-  const element =
-    document.getElementById(
-      elementId
-    );
 
+/* =========================================================
+   COUNTDOWN
+   ========================================================= */
 
-  if (!element) return;
+function updateLiveCountdown(elementId, deadline) {
+  const element = document.getElementById(elementId);
+  if (!element || !deadline) return;
 
-
-  const endTime =
-    new Date(
-      deadline
-    ).getTime();
-
+  const end = new Date(deadline).getTime();
 
   function update() {
+    const seconds = Math.max(0, Math.ceil((end - Date.now()) / 1000));
 
-    const remaining =
-      Math.max(
-        0,
-        endTime -
-        Date.now()
-      );
+    const target = document.getElementById(elementId);
+    if (!target) return;
 
+    target.textContent = seconds;
 
-    const seconds =
-      Math.ceil(
-        remaining / 1000
-      );
-
-
-    element.textContent =
-      seconds;
-
-
-    if (seconds <= 0) {
-
-      element.textContent =
-        "0";
-
-      return;
-
+    if (seconds > 0) {
+      setTimeout(update, 250);
     }
-
-
-    setTimeout(
-      update,
-      250
-    );
-
   }
-
 
   update();
-
 }
 
 
 /* =========================================================
-   RESTORE HOST SESSION
+   ADMIN / QUIZ LIST
    ========================================================= */
 
-function restoreLiveHostSession() {
-
-  try {
-
-    const saved =
-      localStorage.getItem(
-        "zbq_live_host"
-      );
-
-
-    if (saved) {
-
-      liveHostSession =
-        JSON.parse(saved);
-
-    }
-
-  } catch (error) {
-
-    console.error(
-      "Could not restore host session:",
-      error
-    );
-
-  }
-
+async function openAdmin() {
+  showView("adminView");
+  renderAdmin();
 }
 
+async function renderAdmin() {
+  const list = document.getElementById("adminList");
+  if (!list) return;
 
-/* =========================================================
-   RESTORE STUDENT SESSION
-   ========================================================= */
-
-function restoreLiveStudentSession() {
-
-  try {
-
-    const saved =
-      sessionStorage.getItem(
-        "zbq_live_student"
-      );
-
-
-    if (saved) {
-
-      liveStudentSession =
-        JSON.parse(saved);
-
-    }
-
-  } catch (error) {
-
-    console.error(
-      "Could not restore student session:",
-      error
-    );
-
-  }
-
+  list.innerHTML = "<p>Quiz management is handled by the institution dashboard.</p>";
 }
 
-
-/* =========================================================
-   ADD LIVE BUTTON TO CREATED QUIZ
-   ========================================================= */
-
-const originalShowCreatedQuiz =
-  window.showCreatedQuiz;
-
-
-window.showCreatedQuiz =
-  function(quiz) {
-
-    originalShowCreatedQuiz(
-      quiz
-    );
-
-
-    const panel =
-      document.getElementById(
-        "createdQuizPanel"
-      );
-
-
-    if (!panel) return;
-
-
-    const existing =
-      document.getElementById(
-        "startLiveQuizButton"
-      );
-
-
-    if (existing) return;
-
-
-    const liveButton =
-      document.createElement(
-        "button"
-      );
-
-
-    liveButton.id =
-      "startLiveQuizButton";
-
-
-    liveButton.className =
-      "primary-btn";
-
-
-    liveButton.style.marginTop =
-      "12px";
-
-
-    liveButton.textContent =
-      "🔴 Start Live Quiz";
-
-
-    liveButton.onclick =
-      function() {
-
-        createLiveQuiz(
-          quiz.code
-        );
-
-      };
-
-
-    panel.appendChild(
-      liveButton
-    );
-
-  };
-
-
-/* =========================================================
-   OVERRIDE STUDENT JOIN
-   ========================================================= */
-
-window.joinQuiz =
-  liveAwareJoinQuiz;
+function clearAllQuizzes() {
+  alert("Local quiz deletion is disabled in Version 3. Use the authorized admin dashboard.");
+}
 
 
 /* =========================================================
    STARTUP
    ========================================================= */
 
-restoreLiveHostSession();
+document.addEventListener("DOMContentLoaded", () => {
+  checkSession();
+});
 
-restoreLiveStudentSession();
-
-
-console.log(
-  "🔴 Zero Barrier Quiz Live Quiz System loaded successfully."
-);
+console.log("Zero Barrier Quiz V3 frontend loaded.");

@@ -1,206 +1,535 @@
-*{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:#f5f7fb;color:#172033}.topbar{height:68px;background:#fff;border-bottom:1px solid #e7eaf0;display:flex;align-items:center;justify-content:space-between;padding:0 5%;position:sticky;top:0;z-index:10}.brand{font-size:22px;font-weight:800}.brand span{color:#4f46e5}.container{width:92%;max-width:1050px;margin:0 auto;padding:42px 0 60px}.view{display:none}.view.active{display:block}.hero{text-align:center;padding:25px 0}.badge{display:inline-block;background:#eef2ff;color:#4338ca;border-radius:999px;padding:7px 13px;font-size:13px;font-weight:700;margin-bottom:12px}.hero h1{font-size:clamp(32px,6vw,58px);margin:8px 0}.subtitle{font-size:19px;color:#667085}.role-grid,.choice-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:35px}.choice-grid{grid-template-columns:repeat(2,1fr)}.role-card,.choice-card{border:1px solid #e4e7ec;background:#fff;border-radius:18px;padding:26px;text-align:left;cursor:pointer;transition:.2s;box-shadow:0 8px 28px rgba(15,23,42,.05)}.role-card:hover,.choice-card:hover,.choice-card.selected{transform:translateY(-2px);border-color:#6366f1;box-shadow:0 12px 32px rgba(79,70,229,.12)}.role-icon,.choice-icon{font-size:38px}.role-card h2,.choice-card h2{margin:12px 0 7px}.role-card p,.choice-card p{color:#667085;line-height:1.55;margin:0}.section-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;margin-bottom:25px}.section-heading h1{margin:5px 0}.section-heading p{color:#667085}.panel{background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:25px;margin-top:20px;box-shadow:0 8px 28px rgba(15,23,42,.05)}.panel.narrow{max-width:520px;margin:25px auto}.form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin:20px 0}.field.full{grid-column:1/-1}.field label,label{display:block;font-weight:700;font-size:14px;margin:0 0 7px}input,select{width:100%;padding:13px 14px;border:1px solid #d0d5dd;border-radius:10px;font-size:16px;background:#fff}button{font:inherit}.primary-btn,.secondary-btn,.danger-btn,.ghost-btn{border:0;border-radius:10px;padding:13px 18px;cursor:pointer;font-weight:700}.primary-btn{background:#4f46e5;color:#fff;width:100%;margin-top:10px}.secondary-btn{background:#eef2ff;color:#3730a3;margin-top:10px}.danger-btn{background:#fee2e2;color:#991b1b;margin-top:20px}.ghost-btn{background:#fff;border:1px solid #d0d5dd;color:#344054}.muted{color:#667085}.hidden{display:none!important}.status{margin-top:18px;padding:14px;border-radius:10px;background:#f8fafc}.success{background:#ecfdf3;color:#027a48}.error{background:#fef3f2;color:#b42318}.code-box{text-align:center;background:#eef2ff;border-radius:16px;padding:20px;margin:20px 0}.join-code{font-size:34px;font-weight:900;letter-spacing:5px;color:#4338ca}.question-editor,.question-card{border:1px solid #e4e7ec;border-radius:14px;padding:18px;margin:15px 0;background:#fbfcfe}.option-row{display:flex;gap:8px;margin:8px 0;align-items:center}.option-row input{flex:1}.question-card h3{margin-top:0}.question-card label{font-weight:500}.question-card input[type=radio]{width:auto}.result-box{padding:20px;margin-top:20px;border-radius:14px;background:#ecfdf3}.quiz-option{display:block;padding:12px;border:1px solid #e4e7ec;border-radius:10px;margin:8px 0;cursor:pointer}.quiz-option:hover{background:#f8faff}.quiz-option input{width:auto;margin-right:10px}.admin-item{padding:16px;border:1px solid #e4e7ec;border-radius:12px;margin:10px 0;display:flex;justify-content:space-between;gap:15px}.small-code{font-weight:800;color:#4338ca}footer{text-align:center;color:#98a2b3;padding:25px;border-top:1px solid #e5e7eb}@media(max-width:750px){.role-grid,.choice-grid,.form-grid{grid-template-columns:1fr}.section-heading{flex-direction:column}.admin-item{flex-direction:column}}
-/* =========================
-   LEADERBOARD
-========================= */
 
-.leaderboard-panel{
-  background:#fff;
-  border:1px solid #e5e7eb;
-  border-radius:18px;
-  padding:25px;
-  margin-top:20px;
-  box-shadow:0 8px 28px rgba(15,23,42,.05);
+/* =========================================================
+   ZERO BARRIER QUIZ — VERSION 3
+   Modern Multi-Institution Quiz Platform
+   ========================================================= */
+
+:root {
+  --primary: #4f46e5;
+  --primary-dark: #3730a3;
+  --secondary: #06b6d4;
+  --success: #16a34a;
+  --danger: #dc2626;
+  --warning: #f59e0b;
+  --bg: #f4f7fc;
+  --card: #ffffff;
+  --text: #172033;
+  --muted: #64748b;
+  --border: #e2e8f0;
+  --radius: 18px;
+  --shadow: 0 8px 30px rgba(15, 23, 42, 0.08);
 }
 
-.leaderboard-panel h2{
-  margin:0 0 6px;
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
-.leaderboard-header{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  margin-bottom:20px;
+body {
+  font-family: Inter, Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.6;
 }
 
-.leaderboard-table-header,
-.leaderboard-row{
-  display:grid;
-  grid-template-columns:80px 1fr 120px 120px;
-  gap:15px;
-  align-items:center;
+button,
+input,
+select,
+textarea {
+  font: inherit;
 }
 
-.leaderboard-table-header{
-  background:#f8fafc;
-  padding:13px 15px;
-  border-radius:10px;
-  font-size:13px;
-  font-weight:800;
-  color:#667085;
+button {
+  border: none;
+  cursor: pointer;
+  transition: 0.2s ease;
 }
 
-.leaderboard-row{
-  padding:16px 15px;
-  border-bottom:1px solid #e5e7eb;
+button:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.04);
 }
 
-.leaderboard-row:last-child{
-  border-bottom:0;
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
 }
 
-.leaderboard-rank{
-  font-size:18px;
-  font-weight:900;
+input,
+select,
+textarea {
+  width: 100%;
+  padding: 13px 15px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: white;
+  outline: none;
+  color: var(--text);
+  margin: 6px 0 15px;
 }
 
-.leaderboard-name{
-  font-size:16px;
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
 }
 
-.leaderboard-score{
-  font-weight:800;
+textarea {
+  min-height: 100px;
+  resize: vertical;
 }
 
-.leaderboard-percentage{
-  font-weight:800;
-  color:#4338ca;
+label {
+  display: block;
+  font-weight: 600;
+  margin-top: 10px;
 }
 
-.student-rank{
-  background:#eef2ff;
-  color:#3730a3;
-  padding:14px;
-  border-radius:10px;
-  margin-top:15px;
-  text-align:center;
-  font-size:18px;
+h1,
+h2,
+h3 {
+  line-height: 1.3;
+  margin-bottom: 12px;
 }
 
-.leaderboard-btn{
-  width:100%;
-  margin-top:15px;
+p {
+  margin-bottom: 10px;
 }
 
-.leaderboard-back{
-  margin-top:20px;
+a {
+  color: var(--primary);
 }
 
-@media(max-width:750px){
+/* Layout */
 
-  .leaderboard-table-header,
-  .leaderboard-row{
-    grid-template-columns:50px 1fr 75px 80px;
-    gap:8px;
-    font-size:13px;
-  }
-
-  .leaderboard-panel{
-    padding:15px;
-  }
-
+.container,
+.main-container,
+.app-container {
+  width: min(1100px, 94%);
+  margin: 30px auto;
 }
-/* ===== Zero Barrier Logo ===== */
 
-.brand {
+header,
+.top-header,
+.navbar {
+  background: white;
+  padding: 18px 5%;
+  box-shadow: 0 3px 15px rgba(15, 23, 42, 0.05);
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
-.site-logo {
-  width: 45px;
-  height: 45px;
+.logo,
+.brand {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--primary);
+}
+
+.logo img,
+.brand img {
+  max-width: 180px;
+  max-height: 65px;
   object-fit: contain;
 }
 
-/* ===== Loyola College Image ===== */
+.page-title {
+  font-size: clamp(25px, 4vw, 38px);
+  font-weight: 800;
+  margin-bottom: 10px;
+}
 
-.college-image {
+.subtitle {
+  color: var(--muted);
+  margin-bottom: 24px;
+}
+
+/* Cards */
+
+.card,
+.panel,
+.quiz-card,
+.dashboard-card {
+  background: var(--card);
+  padding: 25px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  margin-bottom: 20px;
+}
+
+.card-grid,
+.role-grid,
+.dashboard-grid,
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+  margin: 24px 0;
+}
+
+.role-card {
+  background: white;
+  padding: 30px 24px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  text-align: center;
+  transition: 0.25s ease;
+}
+
+.role-card:hover {
+  transform: translateY(-5px);
+  border-color: var(--primary);
+}
+
+.role-card h2 {
+  color: var(--primary);
+  margin: 10px 0;
+}
+
+.role-icon,
+.card-icon {
+  font-size: 40px;
+  margin-bottom: 10px;
+}
+
+/* Buttons */
+
+.btn,
+button.primary,
+.primary-btn {
+  background: var(--primary);
+  color: white;
+  padding: 12px 20px;
+  border-radius: 11px;
+  font-weight: 700;
+  display: inline-block;
+  text-align: center;
+}
+
+.btn-secondary,
+.secondary-btn {
+  background: #e8eaff;
+  color: var(--primary-dark);
+  padding: 12px 20px;
+  border-radius: 11px;
+  font-weight: 700;
+}
+
+.btn-success {
+  background: var(--success);
+  color: white;
+  padding: 12px 20px;
+  border-radius: 11px;
+}
+
+.btn-danger {
+  background: var(--danger);
+  color: white;
+  padding: 12px 20px;
+  border-radius: 11px;
+}
+
+.btn-warning {
+  background: var(--warning);
+  color: #1e293b;
+  padding: 12px 20px;
+  border-radius: 11px;
+}
+
+.btn-outline {
+  background: white;
+  color: var(--primary);
+  border: 1px solid var(--primary);
+  padding: 11px 19px;
+  border-radius: 11px;
+}
+
+button + button {
+  margin-left: 6px;
+}
+
+/* Forms */
+
+.form-card {
+  max-width: 600px;
+  margin: 25px auto;
+  background: white;
+  padding: 28px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+/* Statistics */
+
+.stat-card {
+  background: white;
+  padding: 22px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+
+.stat-number {
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--primary);
+}
+
+.stat-label {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+/* Quiz */
+
+.question-card {
+  background: white;
+  border: 1px solid var(--border);
+  padding: 24px;
+  border-radius: 16px;
+  margin: 18px 0;
+  box-shadow: var(--shadow);
+}
+
+.question-title {
+  font-size: 19px;
+  font-weight: 700;
+  margin-bottom: 15px;
+}
+
+.option,
+.answer-option {
+  display: block;
+  padding: 15px;
+  margin: 10px 0;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.option:hover,
+.answer-option:hover {
+  border-color: var(--primary);
+  background: #eef2ff;
+}
+
+.option.selected,
+.answer-option.selected {
+  border-color: var(--primary);
+  background: #e0e7ff;
+}
+
+.quiz-code,
+.join-code,
+.code-display {
+  font-size: 32px;
+  font-weight: 900;
+  color: var(--primary);
+  text-align: center;
+  padding: 18px;
+  background: #eef2ff;
+  border-radius: 14px;
+  letter-spacing: 3px;
+  margin: 15px 0;
+}
+
+.timer,
+.countdown {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--danger);
+  text-align: center;
+  margin: 15px;
+}
+
+/* Leaderboard */
+
+.leaderboard {
+  background: white;
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow);
+}
+
+.leaderboard-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px;
+  border-bottom: 1px solid var(--border);
+  gap: 12px;
+}
+
+.leaderboard-row:first-child {
+  font-weight: 800;
+}
+
+.rank {
+  font-weight: 800;
+  color: var(--primary);
+  min-width: 40px;
+}
+
+/* Tables */
+
+table {
   width: 100%;
-  max-height: 300px;
-  object-fit: cover;
-  border-radius: 20px;
-  margin-bottom: 25px;
+  border-collapse: collapse;
+  background: white;
+  margin: 18px 0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+th,
+td {
+  padding: 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+th {
+  background: #eef2ff;
+  color: var(--primary-dark);
+}
+
+/* Institution branding */
+
+.institution-logo {
+  max-width: 150px;
+  max-height: 100px;
+  object-fit: contain;
+  display: block;
+  margin-bottom: 15px;
+}
+
+.institution-header {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  background: white;
+  padding: 22px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  margin-bottom: 24px;
+}
+
+/* Notices */
+
+.alert,
+.notice,
+.message {
+  padding: 14px 18px;
+  border-radius: 12px;
+  margin: 12px 0;
+}
+
+.alert-success {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.alert-error {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.alert-info {
+  background: #e0f2fe;
+  color: #075985;
+}
+
+/* Visibility */
+
+.hidden {
+  display: none !important;
+}
+
+.view {
+  display: none;
+}
+
+.view.active {
   display: block;
 }
 
-/* MODERN ZERO BARRIER QUIZ DESIGN */
-body{
-  background:
-    radial-gradient(circle at 8% 30%, rgba(96,165,250,.18), transparent 30%),
-    radial-gradient(circle at 92% 70%, rgba(59,130,246,.13), transparent 30%),
-    linear-gradient(135deg,#f8fbff 0%,#eef6ff 48%,#ffffff 100%);
-  color:#10203a;
-  overflow-x:hidden;
+/* Footer */
+
+footer {
+  text-align: center;
+  padding: 25px 15px;
+  color: var(--muted);
+  font-size: 14px;
 }
-.topbar{
-  height:82px;
-  padding:0 5%;
-  background:rgba(255,255,255,.88);
-  border-bottom:1px solid rgba(148,163,184,.20);
-  box-shadow:0 8px 30px rgba(30,64,175,.06);
-  backdrop-filter:blur(14px);
-}
-.brand{gap:14px;font-size:28px;font-weight:900;letter-spacing:-.7px}
-.brand span{color:#0f2f66}.brand b{color:#1478f2}
-.site-logo{width:64px;height:64px;object-fit:contain;filter:drop-shadow(0 6px 10px rgba(15,23,42,.10))}
-.ghost-btn{
-  background:linear-gradient(135deg,#1677f2,#2563eb);color:#fff;border:0;
-  border-radius:14px;padding:13px 23px;box-shadow:0 10px 24px rgba(37,99,235,.20)
-}
-.container{width:92%;max-width:1200px;padding:34px 0 60px}
-.hero{
-  position:relative;isolation:isolate;min-height:690px;padding:58px 0 50px;
-  display:flex;flex-direction:column;justify-content:center;overflow:hidden;border-radius:34px
-}
-.hero::before{
-  content:"";position:absolute;z-index:-2;width:min(700px,75vw);height:min(700px,75vw);
-  left:50%;top:48%;transform:translate(-50%,-50%);
-  background-image: url("logo.png") center/contain no-repeat;
-  opacity:.055;filter:grayscale(1)
-}
-.hero::after{
-  content:"";position:absolute;z-index:-3;inset:0;
-  background:
-    radial-gradient(circle at 0% 35%,rgba(59,130,246,.17),transparent 25%),
-    radial-gradient(circle at 100% 72%,rgba(96,165,250,.16),transparent 26%),
-    linear-gradient(180deg,rgba(255,255,255,.76),rgba(239,247,255,.42));
-  border-radius:34px
-}
-.badge{
-  background:linear-gradient(135deg,#e5f1ff,#dbeafe);color:#1558ad;
-  border:1px solid rgba(59,130,246,.12);box-shadow:0 8px 20px rgba(59,130,246,.08);
-  padding:9px 16px
-}
-.hero h1{
-  font-size:clamp(38px,6vw,70px);line-height:1.02;letter-spacing:-2.5px;
-  color:#0b1f3a;text-shadow:0 4px 18px rgba(15,23,42,.05)
-}
-.subtitle{font-size:20px;color:#526581;margin-top:16px}
-.role-grid{width:100%;margin-top:46px;gap:24px}
-.role-card{
-  position:relative;overflow:hidden;min-height:230px;padding:32px 28px;text-align:center;
-  border:1px solid rgba(148,163,184,.30);background:rgba(255,255,255,.74);
-  border-radius:22px;box-shadow:0 18px 45px rgba(30,64,175,.09);backdrop-filter:blur(12px)
-}
-.role-card::before{content:"";position:absolute;left:0;right:0;bottom:0;height:5px;background:#1677f2}
-.role-card:nth-child(2)::before{background:#10b981}
-.role-card:nth-child(3)::before{background:#f5b91e}
-.role-card:hover{
-  transform:translateY(-7px);border-color:rgba(59,130,246,.35);
-  box-shadow:0 25px 55px rgba(30,64,175,.15)
-}
-.role-icon{
-  display:flex;width:76px;height:76px;align-items:center;justify-content:center;
-  margin:0 auto 12px;border-radius:50%;background:#e8f3ff;font-size:38px
-}
-.role-card:nth-child(2) .role-icon{background:#dff9ed}
-.role-card:nth-child(3) .role-icon{background:#fff3cf}
-.role-card h2{color:#0e2340;font-size:25px}
-.role-card p{color:#60718a;font-size:16px}
-@media(max-width:750px){
-  .topbar{height:72px}.brand{font-size:20px}.site-logo{width:52px;height:52px}
-  .hero{min-height:auto;padding:45px 0 35px}.hero h1{letter-spacing:-1.5px}
-  .hero::before{width:90vw;height:90vw}.role-card{min-height:auto}
+
+/* Responsive */
+
+@media (max-width: 768px) {
+  .container,
+  .main-container,
+  .app-container {
+    width: 95%;
+    margin: 18px auto;
+  }
+
+  .card,
+  .panel,
+  .form-card {
+    padding: 18px;
+  }
+
+  header,
+  .top-header,
+  .navbar {
+    padding: 15px;
+  }
+
+  .role-grid,
+  .card-grid,
+  .dashboard-grid,
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .quiz-code,
+  .join-code,
+  .code-display {
+    font-size: 25px;
+  }
+
+  button {
+    margin: 5px 0;
+  }
+
+  button + button {
+    margin-left: 0;
+  }
+
+  table {
+    font-size: 14px;
+  }
+
+  th,
+  td {
+    padding: 9px;
+  }
 }

@@ -1,168 +1,498 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Zero Barrier Quiz</title>
+  <title>Zero Barrier Quiz | Smart Quiz Platform</title>
+  <meta name="description" content="Zero Barrier Quiz - A smart quiz platform for institutions, teachers, and students.">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+
+  <!-- ================= HEADER ================= -->
   <header class="topbar">
     <div class="brand">
-        <img src="logo.png" alt="Zero Barrier Logo" class="site-logo">
-        <span>Zero Barrier <b>Quiz</b></span>
+      <img src="logo.png" alt="Zero Barrier Logo" class="site-logo">
+      <span>Zero Barrier <b>Quiz</b></span>
     </div>
-
-    <button class="ghost-btn" onclick="showHome()">Home</button>
-</header>
+    <nav class="header-actions">
+      <button class="ghost-btn" onclick="showHome()">Home</button>
+    </nav>
+  </header>
 
   <main class="container">
+
+    <!-- ================= HOME ================= -->
     <section id="homeView" class="view active">
       <div class="hero">
-<div class="badge">🎓 Smart Quiz Platform</div>
-        <h1>Welcome to Zero Barrier Quiz</h1>
-        <p class="subtitle">Create, share and take quizzes easily.</p>
+
+        <div class="badge">🎓 Smart Quiz Platform</div>
+
+        <h1>Welcome to <span>Zero Barrier Quiz</span></h1>
+
+        <p class="subtitle">
+          A smarter way for institutions, teachers, and students to learn,
+          assess, and grow together.
+        </p>
+
         <div class="role-grid">
-          <button class="role-card" onclick="openTeacher()">
-            <div class="role-icon">👩‍🏫</div>
-            <h2>Teacher</h2>
-            <p>Create your own quiz or let AI generate questions for you.</p>
-          </button>
-          <button class="role-card" onclick="openAdmin()">
+
+          <!-- Super Admin -->
+          <button class="role-card" onclick="openSuperAdminLogin()">
             <div class="role-icon">🛡️</div>
-            <h2>Admin</h2>
-            <p>View quizzes created on this device and manage the prototype.</p>
+            <h2>Super Admin</h2>
+            <p>Manage institutions, subscriptions, platform settings, and quiz limits.</p>
+            <span class="card-link">Platform Management →</span>
           </button>
+
+          <!-- Institution -->
+          <button class="role-card" onclick="openInstitutionLogin()">
+            <div class="role-icon">🏫</div>
+            <h2>Institution Login</h2>
+            <p>Access your college or school dashboard, manage teachers, and view your plan.</p>
+            <span class="card-link">Institution Portal →</span>
+          </button>
+
+          <!-- Student -->
           <button class="role-card" onclick="openStudent()">
-            <div class="role-icon">👨‍🎓</div>
+            <div class="role-icon">🎓</div>
             <h2>Student</h2>
-            <p>Enter a quiz code and take a quiz.</p>
+            <p>Enter your name and quiz code to participate in your quiz.</p>
+            <span class="card-link">Join a Quiz →</span>
           </button>
+
+        </div>
+
+        <div class="hero-footer">
+          <p>Accessible learning. Smarter assessments. Zero barriers.</p>
         </div>
       </div>
     </section>
 
-    <section id="teacherView" class="view">
+
+    <!-- ================= SUPER ADMIN LOGIN ================= -->
+    <section id="superAdminLoginView" class="view">
       <div class="section-heading">
         <div>
-          <div class="badge">Teacher Dashboard</div>
-          <h1>Create a Quiz</h1>
-          <p>Choose how you want to create your quiz.</p>
+          <div class="badge">🔐 Platform Administration</div>
+          <h1>Super Admin Login</h1>
+          <p>Authorized platform administrators only.</p>
         </div>
         <button class="ghost-btn" onclick="showHome()">← Home</button>
       </div>
 
+      <div class="panel narrow login-panel">
+        <div class="login-icon">🛡️</div>
+        <h2>Platform Control Center</h2>
+
+        <form onsubmit="loginSuperAdmin(event)">
+          <div class="field">
+            <label for="superAdminUsername">Admin Username</label>
+            <input
+              id="superAdminUsername"
+              type="text"
+              placeholder="Enter admin username"
+              autocomplete="username"
+              required
+            >
+          </div>
+
+          <div class="field">
+            <label for="superAdminPassword">Admin Password</label>
+            <input
+              id="superAdminPassword"
+              type="password"
+              placeholder="Enter admin password"
+              autocomplete="current-password"
+              required
+            >
+          </div>
+
+          <button class="primary-btn" type="submit">Secure Admin Login</button>
+        </form>
+
+        <div id="superAdminLoginMessage"></div>
+      </div>
+    </section>
+
+
+    <!-- ================= SUPER ADMIN DASHBOARD ================= -->
+    <section id="superAdminView" class="view">
+      <div class="section-heading">
+        <div>
+          <div class="badge">👑 Super Admin Dashboard</div>
+          <h1>Platform Control Center</h1>
+          <p>Manage institutions and platform subscriptions.</p>
+        </div>
+        <button class="ghost-btn" onclick="superAdminLogout()">Logout</button>
+      </div>
+
+      <div class="dashboard-grid">
+
+        <div class="dashboard-card">
+          <div class="dashboard-card-icon">🏫</div>
+          <h3>Total Institutions</h3>
+          <p id="totalInstitutions">0</p>
+        </div>
+
+        <div class="dashboard-card">
+          <div class="dashboard-card-icon">📝</div>
+          <h3>Quiz Capacity</h3>
+          <p id="totalQuizCapacity">0</p>
+        </div>
+
+        <div class="dashboard-card">
+          <div class="dashboard-card-icon">✅</div>
+          <h3>Active Institutions</h3>
+          <p id="activeInstitutions">0</p>
+        </div>
+
+      </div>
+
+      <div class="panel">
+        <div class="section-heading">
+          <div>
+            <h2>Institution Management</h2>
+            <p>Add and manage institution accounts.</p>
+          </div>
+          <button class="primary-btn" onclick="showAddInstitutionForm()">
+            + Add Institution
+          </button>
+        </div>
+
+        <div id="addInstitutionForm" class="hidden">
+          <h3>Register New Institution</h3>
+
+          <form onsubmit="createInstitution(event)">
+            <div class="form-grid">
+
+              <div class="field">
+                <label for="newInstitutionName">Institution Name</label>
+                <input id="newInstitutionName" type="text" placeholder="College / School Name" required>
+              </div>
+
+              <div class="field">
+                <label for="newInstitutionUsername">Login Username</label>
+                <input id="newInstitutionUsername" type="text" placeholder="Create username" required>
+              </div>
+
+              <div class="field">
+                <label for="newInstitutionPassword">Temporary Password</label>
+                <input id="newInstitutionPassword" type="password" placeholder="Create password" required>
+              </div>
+
+              <div class="field">
+                <label for="newInstitutionQuizLimit">Quiz Creation Limit</label>
+                <input id="newInstitutionQuizLimit" type="number" min="0" placeholder="e.g. 50" required>
+              </div>
+
+              <div class="field">
+                <label for="newInstitutionPlan">Subscription Plan</label>
+                <select id="newInstitutionPlan" required>
+                  <option value="">Select Plan</option>
+                  <option value="Free">Free</option>
+                  <option value="Basic">Basic</option>
+                  <option value="Standard">Standard</option>
+                  <option value="Premium">Premium</option>
+                  <option value="Custom">Custom</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="newInstitutionExpiry">Plan Expiry Date</label>
+                <input id="newInstitutionExpiry" type="date">
+              </div>
+
+              <div class="field full">
+                <label for="newInstitutionLogo">Institution Logo</label>
+                <input id="newInstitutionLogo" type="file" accept="image/*">
+              </div>
+
+            </div>
+
+            <button class="primary-btn" type="submit">Create Institution Account</button>
+            <button class="secondary-btn" type="button" onclick="hideAddInstitutionForm()">Cancel</button>
+            <div id="createInstitutionMessage"></div>
+          </form>
+        </div>
+
+        <div id="institutionManagementList">
+          <!-- Institution list will load here -->
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ================= INSTITUTION LOGIN ================= -->
+    <section id="institutionLoginView" class="view">
+      <div class="section-heading">
+        <div>
+          <div class="badge">🏫 Institution Portal</div>
+          <h1>Institution Login</h1>
+          <p>Sign in with your institution's account credentials.</p>
+        </div>
+        <button class="ghost-btn" onclick="showHome()">← Home</button>
+      </div>
+
+      <div class="panel narrow login-panel">
+        <div class="login-icon">🏫</div>
+        <h2>Welcome, Institution</h2>
+
+        <form onsubmit="loginInstitution(event)">
+          <div class="field">
+            <label for="institutionUsername">Institution Username</label>
+            <input
+              id="institutionUsername"
+              type="text"
+              placeholder="Enter institution username"
+              autocomplete="username"
+              required
+            >
+          </div>
+
+          <div class="field">
+            <label for="institutionPassword">Password</label>
+            <input
+              id="institutionPassword"
+              type="password"
+              placeholder="Enter password"
+              autocomplete="current-password"
+              required
+            >
+          </div>
+
+          <button class="primary-btn" type="submit">Login to Institution</button>
+        </form>
+
+        <div id="institutionLoginMessage"></div>
+      </div>
+    </section>
+
+
+    <!-- ================= INSTITUTION DASHBOARD ================= -->
+    <section id="institutionView" class="view">
+      <div class="section-heading">
+        <div>
+          <div class="badge">🏫 Institution Dashboard</div>
+          <h1 id="institutionDashboardName">Institution</h1>
+          <p>Manage your quizzes, teachers, and subscription.</p>
+        </div>
+        <button class="ghost-btn" onclick="institutionLogout()">Logout</button>
+      </div>
+
+      <div class="institution-profile panel">
+        <img id="institutionDashboardLogo" src="logo.png" alt="Institution Logo" class="institution-logo">
+        <div>
+          <h2 id="institutionProfileName">Institution Name</h2>
+          <p id="institutionPlanInfo">Subscription information</p>
+        </div>
+      </div>
+
+      <div class="dashboard-grid">
+
+        <div class="dashboard-card">
+          <div class="dashboard-card-icon">📝</div>
+          <h3>Quizzes Created</h3>
+          <p id="institutionQuizzesUsed">0</p>
+        </div>
+
+        <div class="dashboard-card">
+          <div class="dashboard-card-icon">📊</div>
+          <h3>Quiz Limit</h3>
+          <p id="institutionQuizLimit">0</p>
+        </div>
+
+        <div class="dashboard-card">
+          <div class="dashboard-card-icon">⚡</div>
+          <h3>Remaining Quizzes</h3>
+          <p id="institutionQuizzesRemaining">0</p>
+        </div>
+
+      </div>
+
+      <div class="panel">
+        <h2>Teacher Access</h2>
+        <p>Teachers can create and manage quizzes within your institution's plan.</p>
+        <button class="primary-btn" onclick="openTeacher()">Open Quiz Creator</button>
+      </div>
+
+      <div class="panel">
+        <h2>Institution Quizzes</h2>
+        <div id="institutionQuizList"></div>
+      </div>
+    </section>
+
+
+    <!-- ================= TEACHER DASHBOARD ================= -->
+    <section id="teacherView" class="view">
+      <div class="section-heading">
+        <div>
+          <div class="badge">👩‍🏫 Teacher Workspace</div>
+          <h1>Create a Quiz</h1>
+          <p>Build a quiz manually or generate questions using AI.</p>
+        </div>
+        <button class="ghost-btn" onclick="returnToDashboard()">← Dashboard</button>
+      </div>
+
+      <div id="teacherAccountInfo" class="panel">
+        <p>Institution: <strong id="teacherInstitutionName">Not connected</strong></p>
+        <p>Quiz allowance: <strong id="teacherQuizAllowance">--</strong></p>
+      </div>
+
       <div class="choice-grid">
+
         <button class="choice-card selected" onclick="selectCreateMode('ai')" id="aiModeCard">
           <div class="choice-icon">🤖</div>
           <h2>AI Quiz Generator</h2>
-          <p>Give a topic and number of questions. AI creates the quiz.</p>
+          <p>Enter a topic and generate questions automatically.</p>
         </button>
+
         <button class="choice-card" onclick="selectCreateMode('manual')" id="manualModeCard">
           <div class="choice-icon">✍️</div>
           <h2>Create My Own Quiz</h2>
           <p>Write your own questions and answers.</p>
         </button>
+
       </div>
 
+      <!-- AI CREATOR -->
       <div id="aiCreator" class="panel">
         <h2>🤖 Generate Quiz with AI</h2>
-        <p class="muted">Example: <strong>Photosynthesis</strong> → 10 questions → Medium → MCQ.</p>
+        <p class="muted">Enter the topic, number of questions, difficulty, and type.</p>
+
         <div class="form-grid">
           <div class="field full">
-            <label>Quiz Topic</label>
-            <input id="aiTopic" placeholder="Example: Photosynthesis">
+            <label for="aiTopic">Quiz Topic</label>
+            <input id="aiTopic" type="text" placeholder="Example: Photosynthesis">
           </div>
+
           <div class="field">
-            <label>Number of Questions</label>
-            <input id="aiCount" type="number" min="1" max="30" value="10">
+            <label for="aiCount">Number of Questions</label>
+            <input id="aiCount" type="number" min="1" max="100" value="10">
           </div>
+
           <div class="field">
-            <label>Difficulty</label>
+            <label for="aiDifficulty">Difficulty</label>
             <select id="aiDifficulty">
               <option>Easy</option>
               <option selected>Medium</option>
               <option>Hard</option>
             </select>
           </div>
+
           <div class="field">
-            <label>Question Type</label>
+            <label for="aiType">Question Type</label>
             <select id="aiType">
               <option value="mcq">Multiple Choice Questions</option>
               <option value="truefalse">True / False</option>
             </select>
           </div>
         </div>
+
         <button class="primary-btn" onclick="generateAIQuiz()">🤖 Generate Quiz with AI</button>
         <div id="aiStatus"></div>
       </div>
 
+      <!-- MANUAL CREATOR -->
       <div id="manualCreator" class="panel hidden">
         <h2>✍️ Create Your Own Quiz</h2>
+
         <div class="form-grid">
           <div class="field full">
-            <label>Quiz Title</label>
-            <input id="manualTitle" placeholder="Example: General Science Quiz">
+            <label for="manualTitle">Quiz Title</label>
+            <input id="manualTitle" type="text" placeholder="Example: General Science Quiz">
           </div>
         </div>
+
         <div id="manualQuestions"></div>
+
         <button class="secondary-btn" onclick="addManualQuestion()">+ Add Question</button>
         <button class="primary-btn" onclick="saveManualQuiz()">Save & Create Quiz Code</button>
+
         <div id="manualStatus"></div>
       </div>
 
+      <!-- CREATED QUIZ -->
       <div id="createdQuizPanel" class="panel hidden"></div>
+
     </section>
 
+
+    <!-- ================= STUDENT JOIN ================= -->
     <section id="studentView" class="view">
       <div class="section-heading">
         <div>
-          <div class="badge">Student</div>
+          <div class="badge">🎓 Student Portal</div>
           <h1>Join a Quiz</h1>
-          <p>Enter your name and the code shared by your teacher.</p>
+          <p>Enter your name and the quiz code provided by your teacher.</p>
         </div>
         <button class="ghost-btn" onclick="showHome()">← Home</button>
       </div>
+
       <div class="panel narrow">
-        <label>Your Name</label>
-        <input id="studentName" placeholder="Enter your name">
-        <label>Quiz Code</label>
-        <input id="studentCode" placeholder="Example: ZBQ7421" maxlength="7">
-        <button class="primary-btn" onclick="joinQuiz()">Join Quiz</button>
+        <form onsubmit="joinQuiz(event)">
+          <div class="field">
+            <label for="studentName">Your Name</label>
+            <input id="studentName" type="text" placeholder="Enter your name" required>
+          </div>
+
+          <div class="field">
+            <label for="studentCode">Quiz Code</label>
+            <input id="studentCode" type="text" placeholder="Example: ZBQ7421" maxlength="20" required>
+          </div>
+
+          <button class="primary-btn" type="submit">Join Quiz</button>
+        </form>
+
         <div id="studentMessage"></div>
       </div>
     </section>
 
+
+    <!-- ================= QUIZ PLAY ================= -->
     <section id="quizView" class="view">
       <div class="section-heading">
         <div>
-          <div class="badge">Quiz</div>
-          <h1 id="quizTitle"></h1>
+          <div class="badge">📝 Quiz In Progress</div>
+          <h1 id="quizTitle">Quiz Title</h1>
           <p id="quizStudent"></p>
         </div>
       </div>
+
       <div id="quizQuestions"></div>
+
       <button class="primary-btn" onclick="submitQuiz()">Submit Quiz</button>
       <div id="quizResult"></div>
     </section>
 
+
+    <!-- ================= ADMIN / LEGACY QUIZ VIEW ================= -->
     <section id="adminView" class="view">
       <div class="section-heading">
         <div>
-          <div class="badge">Admin</div>
+          <div class="badge">Platform</div>
           <h1>Quiz Management</h1>
-          <p>Prototype data stored in this browser.</p>
+          <p>Manage quizzes available on the platform.</p>
         </div>
         <button class="ghost-btn" onclick="showHome()">← Home</button>
       </div>
+
       <div class="panel">
         <div id="adminList"></div>
         <button class="danger-btn" onclick="clearAllQuizzes()">Clear Local Quizzes</button>
       </div>
     </section>
+
   </main>
 
-  <footer>Zero Barrier Quiz • Phase 2 Prototype</footer>
+  <!-- ================= FOOTER ================= -->
+  <footer class="footer">
+    <div>Zero Barrier Quiz</div>
+    <p>Accessible learning. Smarter assessments. Zero barriers.</p>
+    <small>© <span id="footerYear">2026</span> Zero Barrier Quiz</small>
+  </footer>
+
   <script src="script.js"></script>
 </body>
 </html>

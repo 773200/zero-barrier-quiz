@@ -1,78 +1,139 @@
-/* =========================================================
-   ZERO BARRIER QUIZ — VERSION 3
-   Multi-Institution Quiz Platform
-   ========================================================= */
 
-let currentUser = null;
+/* ==========================================================
+   ZERO BARRIER QUIZ - VERSION 3
+   Frontend Controller
+   ========================================================== */
+
+const API = "";
+let zbqToken = localStorage.getItem("zbq_token") || "";
+let zbqRole = localStorage.getItem("zbq_role") || "";
+let zbqInstitution = JSON.parse(localStorage.getItem("zbq_institution") || "null");
+
 let currentQuiz = null;
-let currentStudent = "";
-let createMode = "ai";
-let liveHostSession = null;
-let liveStudentSession = null;
-
-let liveHostTimer = null;
-let liveStudentTimer = null;
-
+let studentName = "";
+let studentAnswers = [];
 let manualQuestions = [];
-let leaderboards = {};
+let manualQuizTitle = "";
+let createMode = "ai";
 
+/* ==========================================================
+   HELPERS
+   ========================================================== */
 
-/* =========================================================
-   API HELPER
-   ========================================================= */
+function el(...ids) {
+  for (const id of ids) {
+    const node = document.getElementById(id);
+    if (node) return node;
+  }
+  return null;
+}
+
+function value(...ids) {
+  return el(...ids)?.value?.trim() || "";
+}
+
+function setText(text, ...ids) {
+  const node = el(...ids);
+  if (node) node.textContent = text ?? "";
+}
+
+function setHTML(html, ...ids) {
+  const node = el(...ids);
+  if (node) node.innerHTML = html ?? "";
+}
+
+function escapeHtml(text) {
+  return String(text ?? "").replace(/[&<>"']/g, ch => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  }[ch]));
+}
+
+function authHeaders() {
+  return {
+    "Content-Type": "application/json",
+    ...(zbqToken ? { Authorization: "Bearer " + zbqToken } : {})
+  };
+}
 
 async function api(url, options = {}) {
-  const response = await fetch(url, {
-    credentials: "same-origin",
+  const headers = {
+    ...(options.headers || {}),
+    ...(zbqToken ? { Authorization: "Bearer " + zbqToken } : {})
+  };
+
+  if (options.body && !(options.body instanceof FormData)) {
+    headers["Content-Type"] = "application/json";
+  }
+
+  const response = await fetch(API + url, {
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {})
-    }
+    headers
   });
 
-  const data = await response.json().catch(() => ({}));
+  let data = {};
+  try {
+    data = await response.json();
+  } catch {}
 
   if (!response.ok) {
-    throw new Error(data.error || "Request failed.");
+    throw new Error(data.error || "Request failed (" + response.status + ")");
   }
 
   return data;
 }
 
-
-/* =========================================================
-   UTILITIES
-   ========================================================= */
-
-function escapeHtml(value) {
-  return String(value ?? "").replace(/[&<>"']/g, char => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#039;"
-  }[char]));
+function showMessage(message, type = "info") {
+  alert(message);
 }
 
-function showStatus(elementId, message, type = "info") {
-  const el = document.getElementById(elementId);
-  if (!el) return;
+function saveLogin(token, role, institution = null) {
+  zbqToken = token;
+  zbqRole = role;
+  zbqInstitution = institution;
 
-  el.innerHTML = `
-    <div class="status ${type}">
-      ${escapeHtml(message)}
-    </div>
-  `;
+  localStorage.setItem("zbq_token", token);
+  localStorage.setItem("zbq_role", role);
+
+  if (institution) {
+    localStorage.setItem("zbq_institution", JSON.stringify(institution));
+  } else {
+    localStorage.removeItem("zbq_institution");
+  }
 }
 
-function showView(id) {
-  document.querySelectorAll(".view").forEach(view => {
-    view.classList.remove("active");
+function clearLogin() {
+  zbqToken = "";
+  zbqRole = "";
+  zbqInstitution = null;
+
+  localStorage.removeItem("zbq_token");
+  localStorage.removeItem("zbq_role");
+  localStorage.removeItem("zbq_institution");
+}
+
+function hideAllViews() {
+  document.querySelectorAll(".view").forEach(v => {
+    v.classList.remove("active");
+    v.style.display = "none";
   });
 
-  const view = document.getElementById(id);
-  if (view) view.classList.add("active");
+  document.querySelectorAll("[data-view]").forEach(v => {
+    v.style.display = "none";
+  });
+}
+
+function showView(viewId) {
+  hideAllViews();
+
+  const view = document.getElementById(viewId);
+  if (view) {
+    view.style.display = "block";
+    view.classList.add("active");
+  }
 
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -81,20 +142,9 @@ function showHome() {
   showView("homeView");
 }
 
-function returnToDashboard() {
-  if (currentUser?.role === "super_admin") {
-    openSuperAdminDashboard();
-  } else if (currentUser?.role === "institution") {
-    openInstitutionDashboard();
-  } else {
-    showHome();
-  }
-}
-
-
-/* =========================================================
-   AUTHENTICATION
-   ========================================================= */
+/* ==========================================================
+   HOME / ROLE NAVIGATION
+   ========================================================== */
 
 function openSuperAdminLogin() {
   showView("superAdminLoginView");
@@ -104,266 +154,305 @@ function openInstitutionLogin() {
   showView("institutionLoginView");
 }
 
-async function loginSuperAdmin() {
-  const username = document.getElementById("superAdminUsername")?.value.trim();
-  const password = document.getElementById("superAdminPassword")?.value;
+function openStudent() {
+  showView("studentJoinView");
+}
 
-  if (!username || !password) {
-    showStatus("superAdminMessage", "Enter username and password.", "error");
+function openTeacher() {
+  if (zbqRole !== "institution" || !zbqToken) {
+    openInstitutionLogin();
     return;
   }
+  loadInstitutionDashboard();
+}
 
-  try {
-    const data = await api("/api/auth/super-admin/login", {
-      method: "POST",
-      body: JSON.stringify({ username, password })
-    });
-
-    currentUser = data.user;
-    openSuperAdminDashboard();
-  } catch (error) {
-    showStatus("superAdminMessage", error.message, "error");
+function openAdmin() {
+  if (zbqRole === "superadmin" && zbqToken) {
+    loadSuperAdminDashboard();
+  } else {
+    openSuperAdminLogin();
   }
 }
 
-async function loginInstitution() {
-  const username = document.getElementById("institutionUsername")?.value.trim();
-  const password = document.getElementById("institutionPassword")?.value;
-
-  if (!username || !password) {
-    showStatus("institutionMessage", "Enter username and password.", "error");
-    return;
-  }
-
-  try {
-    const data = await api("/api/auth/institution/login", {
-      method: "POST",
-      body: JSON.stringify({ username, password })
-    });
-
-    currentUser = data.user;
-    openInstitutionDashboard();
-  } catch (error) {
-    showStatus("institutionMessage", error.message, "error");
-  }
-}
-
-async function checkSession() {
-  try {
-    const data = await api("/api/auth/me");
-    currentUser = data.user;
-
-    if (currentUser?.role === "super_admin") {
-      openSuperAdminDashboard();
-    } else if (currentUser?.role === "institution") {
-      openInstitutionDashboard();
-    } else {
-      showHome();
-    }
-  } catch {
-    currentUser = null;
+function returnToDashboard() {
+  if (zbqRole === "superadmin") {
+    loadSuperAdminDashboard();
+  } else if (zbqRole === "institution") {
+    loadInstitutionDashboard();
+  } else {
     showHome();
   }
 }
 
-async function superAdminLogout() {
-  await logout();
-}
+/* ==========================================================
+   SUPER ADMIN AUTH
+   ========================================================== */
 
-async function institutionLogout() {
-  await logout();
-}
+async function loginSuperAdmin() {
+  const username = value("superAdminUsername", "superadminUsername", "adminUsername");
+  const password = value("superAdminPassword", "superadminPassword", "adminPassword");
 
-async function logout() {
+  if (!username || !password) {
+    return showMessage("Enter your Super Admin username and password.");
+  }
+
   try {
-    await api("/api/auth/logout", { method: "POST" });
-  } catch {}
+    const data = await api("/api/auth/superadmin", {
+      method: "POST",
+      body: JSON.stringify({ username, password })
+    });
 
-  currentUser = null;
+    saveLogin(data.token, "superadmin");
+    await loadSuperAdminDashboard();
+  } catch (err) {
+    showMessage(err.message);
+  }
+}
+
+function superAdminLogout() {
+  clearLogin();
   showHome();
 }
 
+/* ==========================================================
+   SUPER ADMIN DASHBOARD
+   ========================================================== */
 
-/* =========================================================
-   SUPER ADMIN
-   ========================================================= */
-
-function openSuperAdminDashboard() {
-  showView("superAdminView");
-  loadInstitutions();
-}
-
-async function loadInstitutions() {
-  const list = document.getElementById("institutionList");
-  if (!list) return;
-
-  list.innerHTML = `<p>Loading institutions...</p>`;
-
+async function loadSuperAdminDashboard() {
   try {
-    const data = await api("/api/super-admin/institutions");
+    const data = await api("/api/superadmin/dashboard");
 
-    const institutions = data.institutions || [];
+    showView("superAdminDashboardView");
 
-    list.innerHTML = institutions.length
-      ? institutions.map(institution => `
-          <div class="admin-item">
-            <div>
-              <strong>${escapeHtml(institution.name)}</strong>
-              <p>
-                Username: ${escapeHtml(institution.username)}<br>
-                Plan: ${escapeHtml(institution.plan)}<br>
-                Quizzes: ${institution.usedQuizzes}/${institution.quizLimit}
-              </p>
-            </div>
-          </div>
-        `).join("")
-      : `<p>No institutions added yet.</p>`;
+    const stats = data.stats || {};
 
-  } catch (error) {
-    list.innerHTML = `<p class="status error">${escapeHtml(error.message)}</p>`;
+    setText(stats.institutions ?? 0, "totalInstitutions", "institutionCount");
+    setText(stats.active ?? 0, "activeInstitutions");
+    setText(stats.quizzes ?? 0, "totalQuizzes");
+    setText(stats.submissions ?? 0, "totalSubmissions");
+
+    renderInstitutions(data.institutions || []);
+  } catch (err) {
+    showMessage(err.message);
+    if (err.message.toLowerCase().includes("session")) clearLogin();
   }
 }
 
-function showAddInstitutionForm() {
-  document.getElementById("addInstitutionForm")?.classList.remove("hidden");
-}
+function renderInstitutions(institutions) {
+  const container = el("institutionsList", "institutionList", "institutionsTable");
+  if (!container) return;
 
-function hideAddInstitutionForm() {
-  document.getElementById("addInstitutionForm")?.classList.add("hidden");
-}
-
-async function createInstitution() {
-  const name = document.getElementById("newInstitutionName")?.value.trim();
-  const username = document.getElementById("newInstitutionUsername")?.value.trim();
-  const password = document.getElementById("newInstitutionPassword")?.value;
-  const quizLimit = Number(document.getElementById("newInstitutionLimit")?.value);
-  const plan = document.getElementById("newInstitutionPlan")?.value;
-  const expiry = document.getElementById("newInstitutionExpiry")?.value;
-
-  if (!name || !username || !password) {
-    showStatus("institutionCreateMessage", "Complete all required fields.", "error");
+  if (!institutions.length) {
+    container.innerHTML = "<p>No institutions created yet.</p>";
     return;
   }
 
+  container.innerHTML = institutions.map(inst => `
+    <div class="card">
+      <h3>${escapeHtml(inst.name)}</h3>
+      ${inst.logo ? `<img src="${escapeHtml(inst.logo)}" alt="Logo" style="max-width:100px;max-height:80px">` : ""}
+      <p><b>Username:</b> ${escapeHtml(inst.username)}</p>
+      <p><b>Plan:</b> ${escapeHtml(inst.plan)}</p>
+      <p><b>Quizzes:</b> ${inst.quiz_used} / ${inst.quiz_limit}</p>
+      <p><b>Expiry:</b> ${inst.expires_at ? escapeHtml(new Date(inst.expires_at).toLocaleDateString()) : "No expiry"}</p>
+      <p><b>Status:</b> ${inst.active ? "Active" : "Disabled"}</p>
+      <button class="btn-secondary" onclick="toggleInstitution(${inst.id},${!inst.active})">
+        ${inst.active ? "Disable" : "Enable"}
+      </button>
+    </div>
+  `).join("");
+}
+
+function showAddInstitutionForm() {
+  const form = el("addInstitutionForm", "institutionCreateForm");
+  if (form) form.style.display = "block";
+}
+
+function hideAddInstitutionForm() {
+  const form = el("addInstitutionForm", "institutionCreateForm");
+  if (form) form.style.display = "none";
+}
+
+async function createInstitution() {
+  const name = value("institutionName", "newInstitutionName");
+  const username = value("institutionUsername", "newInstitutionUsername");
+  const password = value("institutionPassword", "newInstitutionPassword");
+  const plan = value("institutionPlan", "newInstitutionPlan") || "Free";
+  const quizLimit = value("institutionQuizLimit", "quizLimit", "newQuizLimit") || "10";
+  const expiresAt = value("institutionExpiry", "expiresAt");
+  const logoInput = el("institutionLogo", "logoUpload", "newInstitutionLogo");
+
+  if (!name || !username || !password) {
+    return showMessage("Fill in institution name, username and password.");
+  }
+
+  const formData = new FormData();
+  formData.append("name", name);
+  formData.append("username", username);
+  formData.append("password", password);
+  formData.append("plan", plan);
+  formData.append("quizLimit", quizLimit);
+  if (expiresAt) formData.append("expiresAt", expiresAt);
+  if (logoInput?.files?.[0]) formData.append("logo", logoInput.files[0]);
+
   try {
-    await api("/api/super-admin/institutions", {
+    const response = await fetch("/api/superadmin/institutions", {
       method: "POST",
-      body: JSON.stringify({
-        name,
-        username,
-        password,
-        quizLimit,
-        plan,
-        expiry
-      })
+      headers: { Authorization: "Bearer " + zbqToken },
+      body: formData
     });
 
-    showStatus("institutionCreateMessage", "Institution created successfully!", "success");
-    hideAddInstitutionForm();
-    await loadInstitutions();
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Institution creation failed.");
 
-  } catch (error) {
-    showStatus("institutionCreateMessage", error.message, "error");
+    showMessage("Institution created successfully!");
+    hideAddInstitutionForm();
+
+    ["institutionName", "newInstitutionName",
+     "institutionUsername", "newInstitutionUsername",
+     "institutionPassword", "newInstitutionPassword",
+     "institutionQuizLimit", "quizLimit", "newQuizLimit",
+     "institutionExpiry", "expiresAt"
+    ].forEach(id => {
+      const node = document.getElementById(id);
+      if (node) node.value = "";
+    });
+
+    await loadSuperAdminDashboard();
+  } catch (err) {
+    showMessage(err.message);
   }
 }
 
-
-/* =========================================================
-   INSTITUTION DASHBOARD
-   ========================================================= */
-
-async function openInstitutionDashboard() {
-  showView("institutionView");
-  loadInstitutionDashboard();
+async function toggleInstitution(id, active) {
+  try {
+    await api("/api/superadmin/institutions/" + id, {
+      method: "PATCH",
+      body: JSON.stringify({ active })
+    });
+    await loadSuperAdminDashboard();
+  } catch (err) {
+    showMessage(err.message);
+  }
 }
+
+/* ==========================================================
+   INSTITUTION AUTH
+   ========================================================== */
+
+async function loginInstitution() {
+  const username = value("institutionLoginUsername", "loginInstitutionUsername", "institutionUser");
+  const password = value("institutionLoginPassword", "loginInstitutionPassword", "institutionPass");
+
+  if (!username || !password) {
+    return showMessage("Enter your institution username and password.");
+  }
+
+  try {
+    const data = await api("/api/auth/institution", {
+      method: "POST",
+      body: JSON.stringify({ username, password })
+    });
+
+    saveLogin(data.token, "institution", data.institution);
+    await loadInstitutionDashboard();
+  } catch (err) {
+    showMessage(err.message);
+  }
+}
+
+function institutionLogout() {
+  clearLogin();
+  showHome();
+}
+
+/* ==========================================================
+   INSTITUTION DASHBOARD
+   ========================================================== */
 
 async function loadInstitutionDashboard() {
   try {
     const data = await api("/api/institution/dashboard");
+    const inst = data.institution;
 
-    const nameEl = document.getElementById("institutionDashboardName");
-    if (nameEl) nameEl.textContent = data.institution?.name || "Institution";
+    zbqInstitution = inst;
+    localStorage.setItem("zbq_institution", JSON.stringify(inst));
 
-    const usageEl = document.getElementById("institutionQuizUsage");
-    if (usageEl) {
-      usageEl.textContent =
-        `${data.usedQuizzes ?? 0} / ${data.quizLimit ?? 0} quizzes used`;
+    showView("institutionDashboardView");
+
+    setText(inst.name, "institutionDashboardName", "institutionNameDisplay");
+    setText(inst.plan, "institutionPlanDisplay", "currentPlan");
+    setText(inst.quiz_used, "institutionQuizUsed", "quizzesUsed");
+    setText(inst.quiz_limit, "institutionQuizLimitDisplay", "quizzesLimit");
+    setText(inst.quiz_remaining, "institutionQuizRemaining", "quizzesRemaining");
+
+    const logo = el("institutionDashboardLogo", "dashboardInstitutionLogo");
+    if (logo && inst.logo) {
+      logo.src = inst.logo;
+      logo.style.display = "block";
     }
 
-    const logo = document.getElementById("institutionLogo");
-    if (logo && data.institution?.logoUrl) {
-      logo.src = data.institution.logoUrl;
-      logo.classList.remove("hidden");
-    }
-  } catch (error) {
-    console.error("Institution dashboard:", error);
+    renderInstitutionQuizzes(data.quizzes || []);
+  } catch (err) {
+    showMessage(err.message);
+    clearLogin();
+    openInstitutionLogin();
   }
 }
 
+function renderInstitutionQuizzes(quizzes) {
+  const container = el("institutionQuizzes", "institutionQuizList", "createdQuizList");
+  if (!container) return;
 
-/* =========================================================
-   TEACHER / QUIZ CREATION
-   ========================================================= */
+  if (!quizzes.length) {
+    container.innerHTML = "<p>You haven't created any quizzes yet.</p>";
+    return;
+  }
 
-function openTeacher() {
-  showView("teacherView");
-  selectCreateMode("ai");
+  container.innerHTML = quizzes.map(q => `
+    <div class="card">
+      <h3>${escapeHtml(q.title)}</h3>
+      <p>Quiz Code: <b>${escapeHtml(q.code)}</b></p>
+      <p>Created: ${q.created_at ? escapeHtml(new Date(q.created_at).toLocaleDateString()) : ""}</p>
+      <button class="btn-secondary" onclick="showLeaderboard('${escapeHtml(q.code)}')">Leaderboard</button>
+    </div>
+  `).join("");
 }
+
+/* ==========================================================
+   CREATE QUIZ MODE
+   ========================================================== */
 
 function selectCreateMode(mode) {
   createMode = mode;
 
-  document.getElementById("aiModeCard")?.classList.toggle("selected", mode === "ai");
-  document.getElementById("manualModeCard")?.classList.toggle("selected", mode === "manual");
+  const aiPanel = el("aiQuizPanel", "aiQuizForm", "aiCreatePanel");
+  const manualPanel = el("manualQuizPanel", "manualQuizForm", "manualCreatePanel");
 
-  document.getElementById("aiCreator")?.classList.toggle("hidden", mode !== "ai");
-  document.getElementById("manualCreator")?.classList.toggle("hidden", mode !== "manual");
-
-  if (mode === "manual" && !document.querySelector(".question-editor")) {
-    addManualQuestion();
-  }
+  if (aiPanel) aiPanel.style.display = mode === "ai" ? "block" : "none";
+  if (manualPanel) manualPanel.style.display = mode === "manual" ? "block" : "none";
 }
-
-
-/* =========================================================
-   NORMALIZE QUIZ
-   ========================================================= */
 
 function normalizeQuiz(quiz) {
   return {
-    title: String(quiz.title || "Untitled Quiz"),
-    questions: (quiz.questions || []).map(question => ({
-      question: String(question.question || ""),
-      options: Array.isArray(question.options)
-        ? question.options.map(String)
-        : [],
-      answer: Number(question.answer ?? 0)
+    title: quiz.title || "Untitled Quiz",
+    questions: (quiz.questions || []).map(q => ({
+      question: q.question || "",
+      options: (q.options || []).slice(0, 4),
+      answer: Number(q.answer),
+      explanation: q.explanation || ""
     }))
   };
 }
 
-
-/* =========================================================
-   AI QUIZ GENERATION
-   ========================================================= */
-
 async function generateAIQuiz() {
-  const topic = document.getElementById("aiTopic")?.value.trim();
-  const count = Number(document.getElementById("aiCount")?.value);
-  const difficulty = document.getElementById("aiDifficulty")?.value;
-  const type = document.getElementById("aiType")?.value;
+  const topic = value("aiTopic", "quizTopic", "topic");
+  const count = Number(value("aiQuestionCount", "questionCount", "quizCount") || 5);
+  const difficulty = value("aiDifficulty", "difficulty") || "medium";
+  const type = value("aiQuestionType", "questionType") || "multiple-choice";
 
-  if (!topic) {
-    showStatus("aiStatus", "Enter a quiz topic.", "error");
-    return;
-  }
-
-  if (!Number.isInteger(count) || count < 1) {
-    showStatus("aiStatus", "Enter a valid number of questions.", "error");
-    return;
-  }
-
-  showStatus("aiStatus", "AI is generating your quiz...", "info");
+  if (!topic) return showMessage("Enter a quiz topic.");
+  if (!zbqToken) return showMessage("Please log in to your institution first.");
 
   try {
     const data = await api("/api/generate-quiz", {
@@ -371,667 +460,352 @@ async function generateAIQuiz() {
       body: JSON.stringify({ topic, count, difficulty, type })
     });
 
-    const quiz = normalizeQuiz(data.quiz || data);
-
-    await createQuiz(quiz, "AI Generated");
-
-    showStatus("aiStatus", "Quiz created successfully!", "success");
-
-  } catch (error) {
-    showStatus("aiStatus", error.message, "error");
+    currentQuiz = normalizeQuiz(data.quiz);
+    await createQuiz(currentQuiz, "AI");
+  } catch (err) {
+    showMessage(err.message);
   }
 }
 
+/* ==========================================================
+   CREATE QUIZ & DISPLAY CODE
+   ========================================================== */
 
-/* =========================================================
-   MANUAL QUIZ
-   ========================================================= */
-
-function addManualQuestion() {
-  const box = document.getElementById("manualQuestions");
-  if (!box) return;
-
-  const n = box.querySelectorAll(".question-editor").length + 1;
-
-  const el = document.createElement("div");
-  el.className = "question-editor";
-
-  el.innerHTML = `
-    <h3>Question ${n}</h3>
-    <input class="mq-text" placeholder="Enter question">
-
-    ${["A", "B", "C", "D"].map((letter, index) => `
-      <div class="option-row">
-        <input class="mq-option" placeholder="Option ${letter}">
-        <label>
-          <input type="radio" name="correct${n}" value="${index}" ${index === 0 ? "checked" : ""}>
-          Correct
-        </label>
-      </div>
-    `).join("")}
-  `;
-
-  box.appendChild(el);
-}
-
-async function saveManualQuiz() {
-  const title = document.getElementById("manualTitle")?.value.trim() || "My Quiz";
-  const editors = [...document.querySelectorAll(".question-editor")];
-
-  if (!editors.length) {
-    showStatus("manualStatus", "Add at least one question.", "error");
-    return;
+async function createQuiz(quiz, method = "Manual") {
+  if (!zbqToken) {
+    return showMessage("Please log in before creating a quiz.");
   }
 
-  const questions = [];
+  quiz = normalizeQuiz(quiz);
 
-  for (const editor of editors) {
-    const question = editor.querySelector(".mq-text")?.value.trim();
-    const options = [...editor.querySelectorAll(".mq-option")].map(x => x.value.trim());
-    const answer = Number(editor.querySelector("input[type=radio]:checked")?.value);
-
-    if (!question || options.some(option => !option)) {
-      showStatus("manualStatus", "Complete every question and all four options.", "error");
-      return;
-    }
-
-    questions.push({ question, options, answer });
+  if (!quiz.title || !quiz.questions.length) {
+    return showMessage("Quiz needs a title and questions.");
   }
 
   try {
-    await createQuiz({ title, questions }, "Teacher Created");
-    showStatus("manualStatus", "Quiz saved successfully!", "success");
-  } catch (error) {
-    showStatus("manualStatus", error.message, "error");
+    const data = await api("/api/quizzes", {
+      method: "POST",
+      body: JSON.stringify({
+        title: quiz.title,
+        questions: quiz.questions
+      })
+    });
+
+    quiz.code = data.quiz.code;
+    quiz.method = method;
+    currentQuiz = quiz;
+
+    showCreatedQuiz(quiz);
+    if (zbqRole === "institution") loadInstitutionDashboard();
+  } catch (err) {
+    showMessage(err.message);
   }
-}
-
-
-/* =========================================================
-   CREATE QUIZ
-   ========================================================= */
-
-async function createQuiz(quiz, method) {
-  const payload = {
-    ...normalizeQuiz(quiz),
-    method
-  };
-
-  const data = await api("/api/quizzes", {
-    method: "POST",
-    body: JSON.stringify(payload)
-  });
-
-  const createdQuiz = data.quiz || data;
-
-  showCreatedQuiz(createdQuiz);
-  return createdQuiz;
 }
 
 function showCreatedQuiz(quiz) {
-  const panel = document.getElementById("createdQuizPanel");
-  if (!panel) return;
+  showView("quizCreatedView");
 
-  panel.classList.remove("hidden");
+  setText(quiz.title, "createdQuizTitle", "quizCreatedTitle");
+  setText(quiz.code, "createdQuizCode", "quizCodeDisplay", "createdCode");
+  setText(quiz.questions.length, "createdQuestionCount", "quizQuestionCount");
 
-  panel.innerHTML = `
-    <div class="code-box">
-      <h2>Quiz Created Successfully!</h2>
-      <p>Your Quiz Code</p>
-      <div class="join-code">${escapeHtml(quiz.code)}</div>
-      <p>Share this code with your students.</p>
-    </div>
+  const codeBox = el("createdQuizCode", "quizCodeDisplay", "createdCode");
+  if (codeBox) codeBox.textContent = quiz.code;
 
-    <h3>${escapeHtml(quiz.title)}</h3>
-    <p>${quiz.questions?.length || 0} questions • ${escapeHtml(quiz.method || "")}</p>
-
-    <button class="secondary-btn" onclick="showLeaderboard('${escapeHtml(quiz.code)}')">
-      View Leaderboard
-    </button>
-
-    <button class="primary-btn" onclick="createLiveQuiz('${escapeHtml(quiz.code)}')">
-      Start Live Quiz
-    </button>
-  `;
-
-  panel.scrollIntoView({ behavior: "smooth" });
+  const details = el("quizCreatedDetails", "createdQuizDetails");
+  if (details) {
+    details.innerHTML = `
+      <h2>${escapeHtml(quiz.title)}</h2>
+      <p>Questions: ${quiz.questions.length}</p>
+      <p>Quiz Code:</p>
+      <div class="quiz-code">${escapeHtml(quiz.code)}</div>
+      <button class="btn" onclick="openStudent()">Go to Student Join</button>
+      <button class="btn-secondary" onclick="showLeaderboard('${escapeHtml(quiz.code)}')">View Leaderboard</button>
+      <button class="btn-outline" onclick="returnToDashboard()">Dashboard</button>
+    `;
+  }
 }
 
+/* ==========================================================
+   MANUAL QUIZ CREATOR
+   ========================================================== */
 
-/* =========================================================
-   STUDENT
-   ========================================================= */
+function addManualQuestion() {
+  const questionText = value("manualQuestionText", "questionText", "newQuestion");
+  const options = [
+    value("manualOption0", "option0", "optionA"),
+    value("manualOption1", "option1", "optionB"),
+    value("manualOption2", "option2", "optionC"),
+    value("manualOption3", "option3", "optionD")
+  ];
 
-function openStudent() {
-  showView("studentView");
-}
+  const answerNode = el("manualCorrectAnswer", "correctAnswer", "correctOption");
+  const answer = answerNode ? Number(answerNode.value) : 0;
 
-async function joinQuiz() {
-  const name = document.getElementById("studentName")?.value.trim();
-  const code = document.getElementById("studentCode")?.value.trim().toUpperCase();
-
-  if (!name || !code) {
-    showStatus("studentMessage", "Enter your name and quiz code.", "error");
-    return;
+  if (!questionText || options.some(o => !o)) {
+    return showMessage("Enter the question and all four options.");
   }
 
-  if (code.startsWith("LIV")) {
-    return joinLiveQuiz(name, code);
+  manualQuestions.push({
+    question: questionText,
+    options,
+    answer
+  });
+
+  renderManualQuestions();
+
+  ["manualQuestionText", "questionText", "newQuestion",
+   "manualOption0", "option0", "optionA",
+   "manualOption1", "option1", "optionB",
+   "manualOption2", "option2", "optionC",
+   "manualOption3", "option3", "optionD"
+  ].forEach(id => {
+    const n = document.getElementById(id);
+    if (n) n.value = "";
+  });
+}
+
+function renderManualQuestions() {
+  const container = el("manualQuestionsList", "manualQuestionList");
+  if (!container) return;
+
+  container.innerHTML = manualQuestions.map((q, i) => `
+    <div class="card">
+      <b>Question ${i + 1}:</b> ${escapeHtml(q.question)}
+      <ul>${q.options.map(o => `<li>${escapeHtml(o)}</li>`).join("")}</ul>
+      <button class="btn-danger" onclick="removeManualQuestion(${i})">Remove</button>
+    </div>
+  `).join("");
+}
+
+function removeManualQuestion(index) {
+  manualQuestions.splice(index, 1);
+  renderManualQuestions();
+}
+
+async function saveManualQuiz() {
+  const title = value("manualQuizTitle", "quizTitle", "newQuizTitle");
+
+  if (!title) return showMessage("Enter a quiz title.");
+  if (!manualQuestions.length) return showMessage("Add at least one question.");
+
+  await createQuiz({ title, questions: manualQuestions }, "Manual");
+  manualQuestions = [];
+  renderManualQuestions();
+}
+
+/* ==========================================================
+   STUDENT JOIN
+   ========================================================== */
+
+async function joinQuiz() {
+  const name = value("studentName", "playerName", "joinStudentName");
+  const code = value("quizCode", "joinQuizCode", "studentQuizCode").toUpperCase();
+
+  if (!name || !code) {
+    return showMessage("Enter your name and quiz code.");
   }
 
   try {
-    const data = await api(`/api/quizzes/${encodeURIComponent(code)}`);
-    const quiz = data.quiz || data;
+    const data = await api("/api/quizzes/" + encodeURIComponent(code));
+    studentName = name;
+    currentQuiz = normalizeQuiz(data.quiz || data);
+    currentQuiz.code = code;
 
-    if (!quiz || !Array.isArray(quiz.questions)) {
-      throw new Error("Quiz not found.");
-    }
-
-    currentQuiz = quiz;
-    currentStudent = name;
-    renderQuiz();
-
-  } catch (error) {
-    showStatus("studentMessage", error.message, "error");
+    studentAnswers = new Array(currentQuiz.questions.length).fill(null);
+    renderStudentQuiz();
+  } catch (err) {
+    showMessage(err.message);
   }
 }
 
-function renderQuiz() {
-  showView("quizView");
+function renderStudentQuiz() {
+  if (!currentQuiz) return;
+  showView("quizTakingView");
 
-  document.getElementById("quizTitle").textContent = currentQuiz.title || "Quiz";
-  document.getElementById("quizStudent").textContent =
-    `Student: ${currentStudent} • Code: ${currentQuiz.code}`;
+  setText(currentQuiz.title, "takingQuizTitle", "studentQuizTitle");
 
-  document.getElementById("quizResult").innerHTML = "";
+  const container = el("quizQuestions", "studentQuestions", "quizQuestionContainer");
+  if (!container) return;
 
-  document.getElementById("quizQuestions").innerHTML =
-    currentQuiz.questions.map((question, index) => `
-      <div class="question-card">
-        <h3>${index + 1}. ${escapeHtml(question.question)}</h3>
-
-        ${(question.options || []).map((option, i) => `
-          <label class="quiz-option">
-            <input type="radio" name="q${index}" value="${i}">
-            ${escapeHtml(option)}
-          </label>
-        `).join("")}
-      </div>
-    `).join("");
+  container.innerHTML = currentQuiz.questions.map((q, i) => `
+    <div class="question-card">
+      <h3>Question ${i + 1}</h3>
+      <p class="question-title">${escapeHtml(q.question)}</p>
+      ${q.options.map((option, j) => `
+        <label class="option">
+          <input type="radio" name="question_${i}" value="${j}"
+            onchange="studentAnswers[${i}]=${j}">
+          ${escapeHtml(option)}
+        </label>
+      `).join("")}
+    </div>
+  `).join("") + `
+    <button class="btn-success" onclick="submitQuiz()">Submit Quiz</button>
+  `;
 }
-
-
-/* =========================================================
-   SUBMIT NORMAL QUIZ
-   ========================================================= */
 
 async function submitQuiz() {
   if (!currentQuiz) return;
 
-  let score = 0;
-  let answered = 0;
-
-  currentQuiz.questions.forEach((question, index) => {
-    const selected = document.querySelector(`input[name="q${index}"]:checked`);
-
-    if (selected) {
-      answered++;
-      if (Number(selected.value) === question.answer) score++;
-    }
-  });
-
-  const total = currentQuiz.questions.length;
+  if (studentAnswers.some(a => a === null)) {
+    if (!confirm("You haven't answered every question. Submit anyway?")) return;
+  }
 
   try {
-    const data = await api(`/api/quizzes/${encodeURIComponent(currentQuiz.code)}/results`, {
+    const data = await api("/api/quizzes/" + encodeURIComponent(currentQuiz.code) + "/results", {
       method: "POST",
       body: JSON.stringify({
-        name: currentStudent,
-        answers: [...currentQuiz.questions].map((_, index) =>
-          Number(document.querySelector(`input[name="q${index}"]:checked`)?.value ?? -1)
-        )
+        name: studentName,
+        answers: studentAnswers
       })
     });
 
-    const result = data.result || {};
-    const resultBox = document.getElementById("quizResult");
-
-    resultBox.innerHTML = `
-      <div class="result-box">
-        <h2>Quiz Completed!</h2>
-        <p>${escapeHtml(currentStudent)}, your score:</p>
-        <h1>${result.score ?? score}/${result.total ?? total}</h1>
-        <p>${result.percentage ?? Math.round(score / Math.max(total, 1) * 100)}%</p>
-        <p>Answered ${answered} of ${total} questions.</p>
-        <p>Your Rank: #${result.rank ?? "—"}</p>
-        <button class="secondary-btn" onclick="showLeaderboard('${escapeHtml(currentQuiz.code)}')">
-          View Leaderboard
-        </button>
-      </div>
-    `;
-
-    document.querySelectorAll("#quizQuestions input").forEach(input => {
-      input.disabled = true;
-    });
-
-  } catch (error) {
-    showStatus("quizResult", error.message, "error");
+    showQuizResult(data);
+  } catch (err) {
+    showMessage(err.message);
   }
 }
 
+function showQuizResult(data) {
+  showView("quizResultView");
 
-/* =========================================================
-   LEADERBOARD
-   ========================================================= */
+  setText(data.score, "resultScore", "studentScore");
+  setText(data.total, "resultTotal", "studentTotal");
+  setText(data.percentage + "%", "resultPercentage", "studentPercentage");
+  setText(data.rank, "resultRank", "studentRank");
 
-async function getSharedLeaderboard(code) {
-  return await api(`/api/quizzes/${encodeURIComponent(code)}/results`);
+  const resultContainer = el("quizResultDetails", "resultDetails");
+  if (resultContainer) {
+    resultContainer.innerHTML = `
+      <h2>Your Result</h2>
+      <h1>${data.score} / ${data.total}</h1>
+      <h2>${data.percentage}%</h2>
+      <p>Rank: ${data.rank}</p>
+      <button class="btn" onclick="showLeaderboard('${escapeHtml(currentQuiz.code)}')">Leaderboard</button>
+      <button class="btn-secondary" onclick="openStudent()">Join Another Quiz</button>
+      <button class="btn-outline" onclick="showHome()">Home</button>
+    `;
+  }
 }
+
+/* ==========================================================
+   LEADERBOARD
+   ========================================================== */
 
 async function showLeaderboard(code) {
-  try {
-    const data = await getSharedLeaderboard(code);
-    const leaderboard = data.leaderboard || [];
-
-    document.getElementById("sharedLeaderboardModal")?.remove();
-
-    const modal = document.createElement("div");
-    modal.id = "sharedLeaderboardModal";
-    modal.style.cssText = `
-      position:fixed; inset:0; z-index:99999;
-      background:rgba(0,0,0,.65); display:flex;
-      align-items:center; justify-content:center; padding:20px;
-    `;
-
-    modal.innerHTML = `
-      <div style="background:white;width:min(700px,95vw);max-height:85vh;overflow:auto;padding:25px;border-radius:18px;">
-        <h2>Leaderboard</h2>
-        <p>Quiz Code: ${escapeHtml(code)}</p>
-        <p>Participants: ${data.participants ?? leaderboard.length}</p>
-
-        <table style="width:100%;border-collapse:collapse">
-          <thead><tr><th>Rank</th><th>Student</th><th>Score</th><th>%</th></tr></thead>
-          <tbody>
-            ${leaderboard.map(item => `
-              <tr>
-                <td>#${item.rank}</td>
-                <td>${escapeHtml(item.name)}</td>
-                <td>${item.score}/${item.total}</td>
-                <td>${item.percentage}%</td>
-              </tr>
-            `).join("") || `<tr><td colspan="4">No results yet.</td></tr>`}
-          </tbody>
-        </table>
-
-        <button id="closeLeaderboard" class="secondary-btn">Close</button>
-      </div>
-    `;
-
-    document.body.appendChild(modal);
-    document.getElementById("closeLeaderboard").onclick = () => modal.remove();
-    modal.onclick = event => {
-      if (event.target === modal) modal.remove();
-    };
-
-  } catch (error) {
-    alert(error.message);
-  }
-}
-
-
-/* =========================================================
-   LIVE QUIZ — HOST
-   ========================================================= */
-
-async function createLiveQuiz(quizCode) {
-  try {
-    const data = await api("/api/live", {
-      method: "POST",
-      body: JSON.stringify({ quizCode })
-    });
-
-    liveHostSession = {
-      liveCode: data.liveCode,
-      hostToken: data.hostToken,
-      quizCode
-    };
-
-    showLiveHostPanel();
-
-  } catch (error) {
-    alert(error.message);
-  }
-}
-
-function showLiveHostPanel() {
-  const panel = document.getElementById("createdQuizPanel");
-  if (!panel || !liveHostSession) return;
-
-  panel.innerHTML = `
-    <h2>Live Quiz Ready</h2>
-    <div class="join-code">${escapeHtml(liveHostSession.liveCode)}</div>
-    <p>Share this Live Quiz code with students.</p>
-
-    <div id="liveHostPanel">
-      <p id="liveHostStatus">Waiting for students...</p>
-      <div id="liveHostParticipants"></div>
-      <button id="liveStartButton" onclick="startLiveQuiz()" disabled>Start Live Quiz</button>
-    </div>
-  `;
-
-  pollLiveHost();
-}
-
-async function pollLiveHost() {
-  if (!liveHostSession) return;
+  if (!code) code = currentQuiz?.code;
+  if (!code) return showMessage("Quiz code not found.");
 
   try {
-    const data = await api(
-      `/api/live/${encodeURIComponent(liveHostSession.liveCode)}/host-state?token=${encodeURIComponent(liveHostSession.hostToken)}`
-    );
+    const data = await api("/api/quizzes/" + encodeURIComponent(code) + "/results");
+    showView("leaderboardView");
 
-    renderLiveHostState(data);
-  } catch {}
+    setText(code, "leaderboardQuizCode", "leaderboardCode");
 
-  clearTimeout(liveHostTimer);
-  liveHostTimer = setTimeout(pollLiveHost, 1000);
-}
+    const container = el("leaderboardList", "leaderboardResults", "leaderboardTable");
+    if (!container) return;
 
-function renderLiveHostState(data) {
-  const state = data.state || data;
-  const participants = data.participants || state.participants || [];
-  const phase = String(state.phase || state.status || "waiting").toLowerCase();
+    const rows = data.leaderboard || [];
 
-  const status = document.getElementById("liveHostStatus");
-  const participantBox = document.getElementById("liveHostParticipants");
-  const startButton = document.getElementById("liveStartButton");
-
-  if (phase === "waiting") {
-    if (status) status.textContent = `${participants.length} student(s) joined`;
-    if (startButton) startButton.disabled = participants.length === 0;
-
-    if (participantBox) {
-      participantBox.innerHTML = participants.map(p =>
-        `<p>${escapeHtml(p.name)} ${p.answered ? "Answered" : "Waiting"}</p>`
-      ).join("") || "No students joined yet.";
+    if (!rows.length) {
+      container.innerHTML = "<p>No students have submitted yet.</p>";
+      return;
     }
-  } else if (phase === "active" || phase === "live") {
-    if (startButton) startButton.style.display = "none";
-    renderLiveHostQuestion(state);
-  } else if (phase === "finished" || phase === "ended") {
-    renderLiveHostFinal(state);
+
+    container.innerHTML = `
+      <table>
+        <thead><tr><th>Rank</th><th>Name</th><th>Score</th><th>%</th></tr></thead>
+        <tbody>
+          ${rows.map((r, i) => `
+            <tr>
+              <td>${i + 1}</td>
+              <td>${escapeHtml(r.name)}</td>
+              <td>${r.score}/${r.total}</td>
+              <td>${r.percentage}%</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+  } catch (err) {
+    showMessage(err.message);
   }
 }
 
-function renderLiveHostQuestion(data) {
-  const panel = document.getElementById("liveHostPanel");
-  if (!panel) return;
+/* ==========================================================
+   ADMIN / LOCAL QUIZ VIEW
+   ========================================================== */
 
-  const question = data.question;
-  if (!question) return;
-
-  panel.innerHTML = `
-    <h2>Question ${Number(data.currentQuestionIndex || 0) + 1}/${data.totalQuestions || 0}</h2>
-    <div id="liveHostTimer">60</div>
-    <h3>${escapeHtml(question.question)}</h3>
-    ${(question.options || []).map((option, i) =>
-      `<div class="quiz-option">${String.fromCharCode(65 + i)}. ${escapeHtml(option)}</div>`
-    ).join("")}
-    <p>Students answered: ${data.answeredCount || 0}/${(data.participants || []).length}</p>
-  `;
-
-  updateLiveCountdown("liveHostTimer", data.deadline);
+function renderAdmin() {
+  if (zbqRole === "superadmin") {
+    loadSuperAdminDashboard();
+  } else if (zbqRole === "institution") {
+    loadInstitutionDashboard();
+  } else {
+    openSuperAdminLogin();
+  }
 }
 
-async function startLiveQuiz() {
-  if (!liveHostSession) return;
+async function clearAllQuizzes() {
+  if (!confirm("Delete all quizzes? This cannot be undone.")) return;
+
+  if (zbqRole !== "superadmin") {
+    return showMessage("Only Super Admin can clear all quizzes.");
+  }
 
   try {
-    const data = await api(`/api/live/${encodeURIComponent(liveHostSession.liveCode)}/start`, {
-      method: "POST",
-      body: JSON.stringify({ hostToken: liveHostSession.hostToken })
-    });
-
-    renderLiveHostState(data.state || data);
-  } catch (error) {
-    alert(error.message);
+    await api("/api/superadmin/quizzes", { method: "DELETE" });
+    showMessage("All quizzes deleted.");
+    loadSuperAdminDashboard();
+  } catch (err) {
+    showMessage(err.message);
   }
 }
 
-function renderLiveHostFinal(data) {
-  const panel = document.getElementById("liveHostPanel");
-  if (!panel) return;
-
-  panel.innerHTML = `
-    <h2>Live Quiz Finished!</h2>
-    ${renderLeaderboardTable(data.leaderboard || [])}
-  `;
-}
-
-
-/* =========================================================
-   LIVE QUIZ — STUDENT
-   ========================================================= */
-
-async function joinLiveQuiz(name, liveCode) {
-  try {
-    const data = await api(`/api/live/${encodeURIComponent(liveCode)}/join`, {
-      method: "POST",
-      body: JSON.stringify({ name })
-    });
-
-    liveStudentSession = {
-      liveCode,
-      studentToken: data.participantToken || data.studentToken,
-      name
-    };
-
-    showLiveStudentPanel();
-
-  } catch (error) {
-    showStatus("studentMessage", error.message, "error");
-  }
-}
-
-function showLiveStudentPanel() {
-  showView("studentView");
-
-  const msg = document.getElementById("studentMessage");
-  if (!msg) return;
-
-  msg.innerHTML = `
-    <div id="liveStudentPanel">
-      <h2>Live Quiz</h2>
-      <div id="liveStudentContent">Waiting for host...</div>
-    </div>
-  `;
-
-  pollLiveStudent();
-}
-
-async function pollLiveStudent() {
-  if (!liveStudentSession) return;
-
-  try {
-    const data = await api(
-      `/api/live/${encodeURIComponent(liveStudentSession.liveCode)}/state?token=${encodeURIComponent(liveStudentSession.studentToken)}`
-    );
-
-    renderLiveStudentState(data);
-  } catch {}
-
-  clearTimeout(liveStudentTimer);
-  liveStudentTimer = setTimeout(pollLiveStudent, 1000);
-}
-
-function renderLiveStudentState(data) {
-  const phase = String(data.status || data.phase || "waiting").toLowerCase();
-
-  if (phase === "waiting") {
-    const box = document.getElementById("liveStudentContent");
-    if (box) box.innerHTML = `<p>Waiting for host to start...</p>`;
-  } else if (phase === "active" || phase === "live") {
-    renderLiveStudentQuestion(data);
-  } else if (phase === "finished" || phase === "ended") {
-    renderLiveStudentFinal(data);
-  }
-}
-
-function renderLiveStudentQuestion(data) {
-  const box = document.getElementById("liveStudentContent");
-  if (!box || !data.question) return;
-
-  const questionIndex = Number(data.currentQuestionIndex || 0);
-
-  box.innerHTML = `
-    <h2>Question ${questionIndex + 1}/${data.totalQuestions}</h2>
-    <div id="liveStudentTimer">60</div>
-    <h3>${escapeHtml(data.question.question)}</h3>
-
-    ${(data.question.options || []).map((option, index) => `
-      <label class="quiz-option">
-        <input type="radio" name="liveAnswer" value="${index}" ${data.answered ? "disabled" : ""}>
-        ${String.fromCharCode(65 + index)}. ${escapeHtml(option)}
-      </label>
-    `).join("")}
-
-    <button id="liveAnswerButton" onclick="submitLiveAnswer()" ${data.answered ? "disabled" : ""}>
-      ${data.answered ? "Answer Submitted" : "Submit Answer"}
-    </button>
-
-    <div id="liveAnswerStatus">${data.answered ? "Answer submitted." : ""}</div>
-  `;
-
-  window.liveStudentQuestionIndex = questionIndex;
-  updateLiveCountdown("liveStudentTimer", data.deadline);
-}
-
-async function submitLiveAnswer() {
-  const selected = document.querySelector('input[name="liveAnswer"]:checked');
-  if (!selected || !liveStudentSession) return;
-
-  const button = document.getElementById("liveAnswerButton");
-  if (button) button.disabled = true;
-
-  try {
-    await api(`/api/live/${encodeURIComponent(liveStudentSession.liveCode)}/answer`, {
-      method: "POST",
-      body: JSON.stringify({
-        participantToken: liveStudentSession.studentToken,
-        questionIndex: Number(window.liveStudentQuestionIndex || 0),
-        answer: Number(selected.value)
-      })
-    });
-
-    document.querySelectorAll('input[name="liveAnswer"]').forEach(input => {
-      input.disabled = true;
-    });
-
-    const status = document.getElementById("liveAnswerStatus");
-    if (status) status.textContent = "Answer submitted. Waiting for next question.";
-
-  } catch (error) {
-    if (button) button.disabled = false;
-    alert(error.message);
-  }
-}
-
-function renderLiveStudentFinal(data) {
-  const box = document.getElementById("liveStudentContent");
-  if (!box) return;
-
-  const result = data.result || {};
-
-  box.innerHTML = `
-    <h2>Live Quiz Completed!</h2>
-    <h3>${escapeHtml(liveStudentSession?.name || "")}</h3>
-    <h1>${result.score ?? 0}/${result.total ?? data.totalQuestions ?? 0}</h1>
-    <p>${result.percentage ?? 0}%</p>
-    <p>Rank: #${result.rank ?? "—"}</p>
-    ${renderLeaderboardTable(data.leaderboard || [])}
-  `;
-}
-
-
-/* =========================================================
-   LEADERBOARD TABLE
-   ========================================================= */
-
-function renderLeaderboardTable(items) {
-  return `
-    <table style="width:100%;border-collapse:collapse">
-      <thead>
-        <tr><th>Rank</th><th>Student</th><th>Score</th><th>%</th></tr>
-      </thead>
-      <tbody>
-        ${items.map(item => `
-          <tr>
-            <td>#${item.rank}</td>
-            <td>${escapeHtml(item.name)}</td>
-            <td>${item.score}/${item.total}</td>
-            <td>${item.percentage}%</td>
-          </tr>
-        `).join("")}
-      </tbody>
-    </table>
-  `;
-}
-
-
-/* =========================================================
-   COUNTDOWN
-   ========================================================= */
-
-function updateLiveCountdown(elementId, deadline) {
-  const element = document.getElementById(elementId);
-  if (!element || !deadline) return;
-
-  const end = new Date(deadline).getTime();
-
-  function update() {
-    const seconds = Math.max(0, Math.ceil((end - Date.now()) / 1000));
-
-    const target = document.getElementById(elementId);
-    if (!target) return;
-
-    target.textContent = seconds;
-
-    if (seconds > 0) {
-      setTimeout(update, 250);
-    }
-  }
-
-  update();
-}
-
-
-/* =========================================================
-   ADMIN / QUIZ LIST
-   ========================================================= */
-
-async function openAdmin() {
-  showView("adminView");
-  renderAdmin();
-}
-
-async function renderAdmin() {
-  const list = document.getElementById("adminList");
-  if (!list) return;
-
-  list.innerHTML = "<p>Quiz management is handled by the institution dashboard.</p>";
-}
-
-function clearAllQuizzes() {
-  alert("Local quiz deletion is disabled in Version 3. Use the authorized admin dashboard.");
-}
-
-
-/* =========================================================
-   STARTUP
-   ========================================================= */
+/* ==========================================================
+   INITIALIZATION
+   ========================================================== */
 
 document.addEventListener("DOMContentLoaded", () => {
-  checkSession();
+  if (zbqToken && zbqRole === "superadmin") {
+    loadSuperAdminDashboard();
+  } else if (zbqToken && zbqRole === "institution") {
+    loadInstitutionDashboard();
+  } else {
+    showHome();
+  }
 });
 
-console.log("Zero Barrier Quiz V3 frontend loaded.");
+/* Make functions available to HTML onclick attributes */
+Object.assign(window, {
+  showView,
+  showHome,
+  openSuperAdminLogin,
+  loginSuperAdmin,
+  superAdminLogout,
+  openInstitutionLogin,
+  loginInstitution,
+  institutionLogout,
+  returnToDashboard,
+  openTeacher,
+  openStudent,
+  openAdmin,
+  showAddInstitutionForm,
+  hideAddInstitutionForm,
+  createInstitution,
+  toggleInstitution,
+  selectCreateMode,
+  generateAIQuiz,
+  createQuiz,
+  showCreatedQuiz,
+  addManualQuestion,
+  removeManualQuestion,
+  saveManualQuiz,
+  joinQuiz,
+  submitQuiz,
+  showQuizResult,
+  showLeaderboard,
+  renderAdmin,
+  clearAllQuizzes
+});
